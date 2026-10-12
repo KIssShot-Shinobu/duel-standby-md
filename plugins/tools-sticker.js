@@ -37,6 +37,12 @@ const handler = async (m, { conn, args, command, usedPrefix, config }) => {
     throw `Tipe media *${mime || 'tidak diketahui'}* belum didukung.\nKirim gambar atau video (maksimal ${config.media.maxStickerSeconds} detik).`;
   }
 
+  // Validasi durasi lebih dulu supaya pesannya lebih tepat daripada error encoder.
+  const seconds = Number(content.seconds) || 0;
+  if (isVideo && seconds > config.media.maxStickerSeconds) {
+    throw `Video terlalu panjang (${Math.round(seconds)}s). Maksimal ${config.media.maxStickerSeconds} detik.`;
+  }
+
   const encoder = webpEncoder();
   if (!encoder) {
     throw [
@@ -65,11 +71,6 @@ const handler = async (m, { conn, args, command, usedPrefix, config }) => {
     const file = await conn.sendImageAsSticker(m.chat, buffer, m, options);
     if (file && fs.existsSync(file)) fs.unlinkSync(file);
     return;
-  }
-
-  const seconds = Number(content.seconds) || 0;
-  if (seconds > config.media.maxStickerSeconds) {
-    throw `Video terlalu panjang (${Math.round(seconds)}s). Maksimal ${config.media.maxStickerSeconds} detik.`;
   }
 
   const file = await conn.sendVideoAsSticker(m.chat, buffer, m, {
