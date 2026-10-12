@@ -510,6 +510,20 @@ Arti aksinya:
 
 Pengaturan disimpan di `settings.limit` pada database (bertahan setelah restart), dan `.help <command>` menampilkan biaya efektifnya.
 
+### 💾 Apakah pengaturan hilang kalau bot di-restart?
+
+**Tidak.** Pengaturan menu (`settings.menu`) dan limit (`settings.limit`) tersimpan di **`database/database.json`**, bukan di memori, jadi langsung terbaca lagi setelah restart.
+
+Tiga lapis pengaman yang sudah dipasang:
+
+1. **Tulis langsung** — setiap kali owner memakai `.category`, `.cmdset`, `.limitcmd`, atau `.limitcat`, perubahan langsung ditulis ke disk (`db.save(true)`), tidak menunggu timer.
+2. **Flush saat proses berhenti** — `process.on('exit')` memanggil `flushSync()` untuk membuang perubahan tertunda apa pun (termasuk dari fitur lain seperti saldo/exp/user).
+3. **Auto-save berkala** — semua perubahan lain (pesan, limit harian, RPG) di-debounce 10 detik (`DB_SAVE_INTERVAL`), plus flush saat `SIGINT`/`SIGTERM`.
+
+Sudah diuji: proses yang menerapkan 4 pengaturan lalu **dibunuh paksa (SIGKILL)** — saat dijalankan ulang, semuanya masih utuh.
+
+> ⚠️ Yang perlu dijaga: folder **`database/`** harus persisten. Kalau panel mengganti container dari awal / kamu menghapus folder itu, pengaturan (dan data user) ikut hilang. Di Docker sudah otomatis jadi volume (`docker-compose.yml`); kalau pindah server, backup `database/` dan `sessions/`.
+
 ## 🩹 Troubleshooting
 
 ### Stiker tidak jadi / error

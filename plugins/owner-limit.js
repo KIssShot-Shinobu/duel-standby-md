@@ -64,6 +64,7 @@ const handler = async (m, { plugins, db, args, command, usedPrefix }) => {
     if (!entry) throw userError(`❌ Command *${target}* tidak ditemukan.`);
 
     setCommandLimit(db, entry.name, action);
+    await db.save?.(true); // langsung tulis ke disk
     const resolved = resolveLimit(db, entry);
     return m.reply(
       [
@@ -94,6 +95,7 @@ const handler = async (m, { plugins, db, args, command, usedPrefix }) => {
     }
 
     setCategoryLimit(db, tag, action);
+    await db.save?.(true); // langsung tulis ke disk
     const sample = plugins.list.filter((entry) => entry.category === tag);
     const paid = sample.filter((entry) => resolveLimit(db, entry).cost > 0).length;
     return m.reply(

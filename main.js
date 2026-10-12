@@ -47,6 +47,16 @@ print.banner(`🜲 ${config.bot.name}`, `v${config.version}`);
 const db = await initDatabase(config, logger);
 print.success(`Database siap: ${db.stats().file} (${db.stats().users} user, ${db.stats().chats} chat)`);
 
+// Jaring pengaman: apa pun cara bot berhenti (SIGTERM, exit, panel), perubahan
+// database ikut ditulis. Pengaturan owner (menu & limit) tersimpan di sini.
+process.on('exit', () => {
+  try {
+    db.flushSync();
+  } catch {
+    /* jangan menghalangi proses keluar */
+  }
+});
+
 // ── Plugin ──────────────────────────────────────────────────────────────
 const pluginsDir = path.resolve(config.root, 'plugins');
 const plugins = new PluginManager(pluginsDir, { logger });

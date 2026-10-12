@@ -73,6 +73,7 @@ const handler = async (m, { plugins, db, args, command, usedPrefix }) => {
       throw userError(`❌ Kategori *${tag}* tidak ada.\nKategori tersedia: ${categories.join(', ')}`);
     }
     const next = setCategory(db, tag, TOGGLE[action]);
+    await db.save?.(true); // langsung tulis ke disk supaya tidak hilang kalau bot dimatikan
     return m.reply(`✅ Kategori *${tag}* ${ACTION_LABEL[action]}.\nStatus sekarang: ${formatState(next)}`);
   }
 
@@ -94,6 +95,7 @@ const handler = async (m, { plugins, db, args, command, usedPrefix }) => {
     if (!entry) throw userError(`❌ Command *${target}* tidak ditemukan.`);
 
     const next = setCommand(db, entry.name, TOGGLE[action]);
+    await db.save?.(true); // langsung tulis ke disk
     return m.reply(
       [
         `✅ *${entry.help.join(', ') || entry.name}* ${ACTION_LABEL[action]}.`,
