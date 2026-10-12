@@ -112,6 +112,22 @@ export const config = {
     cacheMax: envNumber('YGO_CACHE_MAX', 400),
   },
 
+  /** Game tebak kartu Yu-Gi-Oh! */
+  game: {
+    yugioh: {
+      rounds: envNumber('YGO_QUIZ_ROUNDS', 3),
+      maxRounds: envNumber('YGO_QUIZ_MAX_ROUNDS', 10),
+      mode: env('YGO_QUIZ_MODE', 'pilihan'),
+      timeoutMs: envNumber('YGO_QUIZ_TIMEOUT', 60000),
+      hintDelayMs: envNumber('YGO_QUIZ_HINT_DELAY', 20000),
+      maxAttempts: envNumber('YGO_QUIZ_ATTEMPTS', 3),
+      roundDelayMs: envNumber('YGO_QUIZ_ROUND_DELAY', 2500),
+      rewardSaldo: envNumber('YGO_QUIZ_REWARD', 500),
+      rewardExp: envNumber('YGO_QUIZ_EXP', 25),
+      rewardLimit: envNumber('YGO_QUIZ_LIMIT', 1),
+    },
+  },
+
   ytdlp: {
     path: env('YTDLP_PATH', ''),
     maxDurationSeconds: envNumber('YTDLP_MAX_DURATION', 900),

@@ -19,6 +19,7 @@ Bot **WhatsApp Multi-Device** yang ditulis ulang dari nol (clean-room) dengan ar
 - [Daftar Command](#-daftar-command)
 - [Downloader YouTube (yt-dlp)](#-downloader-youtube-yt-dlp)
 - [Yu-Gi-Oh! (YGOPRODeck API)](#-yu-gi-oh-ygoprodeck-api)
+  - [Game: Tebak Kartu](#-game-tebak-kartu-yu-gi-oh)
 - [Troubleshooting](#-troubleshooting)
 - [Struktur Folder](#-struktur-folder)
 - [Menulis Plugin Sendiri](#-menulis-plugin-sendiri)
@@ -280,6 +281,7 @@ Prefix default: `.#!/,` (mis. `.menu`, `!ping`).
 | `.archetype <nama>` / `.archetypes` | Kartu dalam archetype / daftar archetype |
 | `.cardset <nama>` / `.setcode <kode>` / `.cardsets` | Info booster pack & kartu di dalamnya |
 | `.banlist [tcg\|ocg\|goat]` | Daftar kartu Forbidden/Limited |
+| `.tebakygo` | **Game tebak kartu** (lihat bagian di bawah) |
 </details>
 
 <details>
@@ -373,6 +375,44 @@ Fitur kartu Yu-Gi-Oh! memakai **[YGOPRODeck API v7](https://ygoprodeck.com/api-g
 - Alias tipe: `normal`, `effect`, `ritual`, `fusion`, `synchro`, `xyz`, `link`, `pendulum`, `spell`, `trap`.
 - Env opsional: `YGO_BASE`, `YGO_TIMEOUT`, `YGO_CACHE_FILE`, `YGO_CACHE_MAX`.
 - Cek cepat di server: **`npm run check:ygo`** (versi database, lookup, fuzzy, filter, random, archetype, set, banlist, unduh gambar).
+
+---
+
+### 🎮 Game: Tebak Kartu Yu-Gi-Oh!
+
+Bot mengirim **art crop** kartu (`image_url_cropped`) — jadi **nama kartu tidak terlihat di gambar**. Pemain menebak nama kartunya.
+
+| Command | Fungsi |
+|---|---|
+| `.tebakygo` | Mulai game (default **3 ronde**, mode **pilihan ganda A–D**) |
+| `.tebakygo teks` | Mode tulis nama sendiri (ada 2 petunjuk otomatis) |
+| `.tebakygo pilihan 5` | 5 ronde, pilihan ganda |
+| `.nyerah` | Buka jawaban lalu lanjut ronde berikutnya |
+| `.stoptebak` | Hentikan game (pembuat game / admin / owner) |
+| `.yugoscore` | Papan skor 10 penebak terbaik |
+
+**Aturan & hadiah**
+- Pilihan ganda: 1 percobaan per pemain per ronde (jawab `A`/`B`/`C`/`D` **atau** tulis namanya).
+- Mode teks: maksimal 3 percobaan; petunjuk muncul di detik ke-20 (awalan + jumlah huruf) dan ke-40 (tipe/atribut/archetype).
+- Jawaban benar → **+500 saldo, +25 exp, +1 limit** (bisa diatur lewat env) dan dihitung di `.yugoscore`.
+- Default 60 detik per ronde; waktu habis → jawaban dibuka otomatis dan lanjut ronde berikutnya.
+- Jawaban toleran salah ketik (mis. `dark magican` tetap benar) dan passcode kartu juga diterima.
+- Satu game per chat; hanya pembuat game/admin/owner yang bisa menghentikannya.
+
+**Env pengaturan**
+
+| Env | Default | Fungsi |
+|---|---|---|
+| `YGO_QUIZ_ROUNDS` | `3` | Jumlah ronde default |
+| `YGO_QUIZ_MAX_ROUNDS` | `10` | Batas ronde |
+| `YGO_QUIZ_MODE` | `pilihan` | Mode default (`pilihan`/`teks`) |
+| `YGO_QUIZ_TIMEOUT` | `60000` | Durasi per ronde (ms) |
+| `YGO_QUIZ_HINT_DELAY` | `20000` | Jeda petunjuk pertama (ms) |
+| `YGO_QUIZ_ATTEMPTS` | `3` | Percobaan maksimum di mode teks |
+| `YGO_QUIZ_ROUND_DELAY` | `2500` | Jeda antar ronde (ms) |
+| `YGO_QUIZ_REWARD` / `YGO_QUIZ_EXP` / `YGO_QUIZ_LIMIT` | `500` / `25` / `1` | Hadiah jawaban benar |
+
+Cek cepat tanpa WhatsApp: **`npm run check:quiz`** (ambil kartu asli, tampilkan art crop & pilihan, lalu jawab otomatis).
 
 ---
 
