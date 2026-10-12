@@ -1,24 +1,41 @@
 /**
- * Ubah gambar/video menjadi stiker.
- *   .sticker              -> kirim/reply gambar atau video (video maks 10 detik)
- *   .sticker NamaPack     -> set nama pack
+ * Ubah gambar / video / GIF menjadi stiker.
  *
- * Menerima sumber media dari:
- *   - pesan yang sedang dikirim (foto/video + caption .sticker)
- *   - pesan yang di-reply (termasuk foto yang dikirim sebagai dokumen)
+ *   .sticker                        -> kirim gambar/video/GIF dengan caption .sticker
+ *   .sticker (reply)                -> reply gambar/GIF/video milik siapa pun
+ *   .sticker https://.../x.gif      -> dari tautan
+ *   .sticker NamaPack               -> set nama pack
+ *
+ * Catatan penting:
+ *  - GIF & WebP animasi => stiker ANIMASI (bukan statis).
+ *  - Jenis media dideteksi dari ISI berkas (file-type), bukan dari mimetype
+ *    pesan — banyak GIF dikirim WhatsApp sebagai dokumen tanpa mimetype jelas.
+ *  - Video/GIF dipotong otomatis ke `maxStickerSeconds`.
  */
 import fs from 'node:fs';
-import { webpEncoder } from '../lib/media.js';
+import { detectMediaKind, webpEncoder } from '../lib/media.js';
+import { fetchBuffer, isUrl } from '../lib/functions.js';
 import { userError } from '../lib/errors.js';
 
-/** Cari pesan yang benar-benar berisi media (reply diprioritaskan). */
-function pickMediaSource(m) {
-  const candidates = [m.quoted, m].filter(Boolean);
-  return candidates.find((item) => item.msg?.mimetype) || null;
+const IMAGE_MIME = /image\/(jpe?g|png|webp|gif|bmp|tiff)/i;
+const VIDEO_MIME = /video\//i;
+
+/** Ambil sumber media: tautan > pesan yang di-reply > pesan yang dikirim. */
+function pickSource(m, args = []) {
+  const urlArg = [...(args || []), String(m.text || '')]
+    .map((value) => String(value).trim())
+    .find((value) => isUrl(value));
+  if (urlArg) return { kind: 'url', url: urlArg, label: urlArg };
+
+  if (m.quoted?.msg?.mimetype) return { kind: 'quoted', node: m.quoted, label: 'media yang di-reply' };
+  if (m.msg?.mimetype) return { kind: 'self', node: m, label: 'media yang dikirim' };
+  // pesan lama/dokumen: tetap coba selama ada isi media
+  if (m.quoted?.msg) return { kind: 'quoted', node: m.quoted, label: 'media yang di-reply' };
+  return null;
 }
 
 const handler = async (m, { conn, args, command, usedPrefix, config }) => {
-  const source = pickMediaSource(m);
+  const source = pickSource(m, args);
 
   if (!source) {
     throw userError(
@@ -26,30 +43,37 @@ const handler = async (m, { conn, args, command, usedPrefix, config }) => {
         '❌ *Tidak ada gambar/video* pada pesan ini.',
         '',
         'Cara pakai:',
-        `• Kirim foto/video dengan caption *${usedPrefix}${command}*`,
-        `• atau reply (geser) foto/video lalu kirim *${usedPrefix}${command}*`,
+        `• Kirim foto/video/GIF dengan caption *${usedPrefix}${command}*`,
+        `• atau reply (geser) foto/GIF/video milik siapa pun lalu kirim *${usedPrefix}${command}*`,
+        `• atau kirim tautan: *${usedPrefix}${command} https://.../x.gif*`,
         '',
-        `Durasi video maksimal ${config.media.maxStickerSeconds} detik.`,
+        `Durasi video/GIF maksimal ${config.media.maxStickerSeconds} detik.`,
       ].join('\n'),
     );
   }
 
-  const content = source.msg || {};
-  const mime = content.mimetype || '';
-  const isImage = /image\/(jpe?g|png|webp|gif|bmp|tiff)/i.test(mime);
-  const isVideo = /video\//i.test(mime);
+  const content = source.kind === 'url' ? {} : source.node.msg || {};
+  const messageMime = content.mimetype || '';
 
-  if (!isImage && !isVideo) {
-    throw userError(
-      `❌ Tipe media *${mime || 'tidak diketahui'}* belum didukung.\nKirim gambar atau video (maksimal ${config.media.maxStickerSeconds} detik).`,
-    );
-  }
+  const packname = args.filter((arg) => !isUrl(arg)).join(' ').trim() || config.bot.packname;
+  const options = { packname, author: config.bot.author };
+  const maxSeconds = config.media.maxStickerSeconds;
 
-  // Validasi durasi lebih dulu supaya pesannya lebih tepat daripada error encoder.
-  const seconds = Number(content.seconds) || 0;
-  if (isVideo && seconds > config.media.maxStickerSeconds) {
-    throw userError(`❌ Video terlalu panjang (${Math.round(seconds)}s). Maksimal ${config.media.maxStickerSeconds} detik.`);
-  }
+  await m.reply(config.messages.stickerWait);
+
+  const buffer =
+    source.kind === 'url'
+      ? await fetchBuffer(source.url, { timeout: 30000 })
+      : await source.node.download();
+
+  if (!buffer?.length) throw userError('❌ Gagal mengunduh media (berkas kosong). Coba kirim ulang.');
+
+  // Deteksi dari ISI berkas: lebih akurat daripada mimetype pesan.
+  const detected = await detectMediaKind(buffer);
+  const mime = detected.mime || messageMime;
+  const isGifLike = detected.kind === 'gif' || detected.kind === 'animated' || /gif/i.test(messageMime) || content.gifPlayback === true;
+  const isVideo = detected.kind === 'video' || VIDEO_MIME.test(messageMime);
+  const isImage = detected.kind === 'image' || detected.kind === 'sticker' || IMAGE_MIME.test(messageMime) || IMAGE_MIME.test(mime);
 
   const encoder = webpEncoder();
   if (!encoder) {
@@ -65,29 +89,36 @@ const handler = async (m, { conn, args, command, usedPrefix, config }) => {
       ].join('\n'),
     );
   }
-  if (isVideo && encoder !== 'ffmpeg') {
-    throw userError('❌ Stiker dari video butuh ffmpeg dengan libwebp.\nPasang dengan: `apt install ffmpeg`.');
-  }
 
-  const packname = args.join(' ').trim() || config.bot.packname;
-  await m.reply(config.messages.stickerWait);
+  // GIF/WebP animasi/video => stiker animasi (butuh ffmpeg).
+  if (isGifLike || isVideo) {
+    if (!isGifLike && encoder !== 'ffmpeg') {
+      throw userError('❌ Stiker dari video butuh ffmpeg dengan libwebp.\nPasang dengan: `apt install ffmpeg`.');
+    }
+    if (encoder !== 'ffmpeg') {
+      throw userError('❌ GIF/animasi butuh ffmpeg dengan libwebp.\nPasang dengan: `apt install ffmpeg`.');
+    }
 
-  const buffer = await source.download();
-  if (!buffer?.length) throw userError('❌ Gagal mengunduh media (file kosong). Coba kirim ulang fotonya.');
+    // Video biasa: tolak kalau terlalu panjang. GIF dipotong otomatis.
+    const seconds = Number(content.seconds) || 0;
+    if (isVideo && !isGifLike && seconds > maxSeconds) {
+      throw userError(`❌ Video terlalu panjang (${Math.round(seconds)}s). Maksimal ${maxSeconds} detik.`);
+    }
 
-  const options = { packname, author: config.bot.author };
-
-  if (isImage) {
-    const file = await conn.sendImageAsSticker(m.chat, buffer, m, options);
+    const file = await conn.sendVideoAsSticker(m.chat, buffer, m, { ...options, seconds: maxSeconds });
     if (file && fs.existsSync(file)) fs.unlinkSync(file);
-    return;
+    return true;
   }
 
-  const file = await conn.sendVideoAsSticker(m.chat, buffer, m, {
-    ...options,
-    seconds: config.media.maxStickerSeconds,
-  });
+  if (!isImage) {
+    throw userError(
+      `❌ Tipe media *${mime || 'tidak diketahui'}* belum didukung.\nKirim gambar, GIF, atau video (maksimal ${maxSeconds} detik).`,
+    );
+  }
+
+  const file = await conn.sendImageAsSticker(m.chat, buffer, m, options);
   if (file && fs.existsSync(file)) fs.unlinkSync(file);
+  return true;
 };
 
 handler.help = ['sticker', 'stiker', 's'];

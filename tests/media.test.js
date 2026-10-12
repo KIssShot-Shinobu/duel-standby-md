@@ -7,12 +7,16 @@ import path from 'node:path';
 import { attachHelpers } from '../lib/simple.js';
 import {
   addExif,
+  detectMediaKind,
   hasFfmpeg,
   imageToWebp,
+  isAnimatedWebp,
+  isGif,
   pickDownloadedFile,
   resolveYtDlp,
   runFfmpeg,
   toAudio,
+  videoToWebp,
   webpToPng,
 } from '../lib/media.js';
 import { extractText, detectType, hasMeaningfulContent, smsg } from '../lib/serialize.js';
@@ -304,6 +308,199 @@ test('pickDownloadedFile mengabaikan file sementara', () => {
   assert.equal(pickDownloadedFile(['.hidden', 'media.mp4.ytdl']), null);
   assert.equal(pickDownloadedFile(['media.m4a']), 'media.m4a');
   assert.equal(pickDownloadedFile(['media.mp4', 'media.mp4.part']), 'media.mp4');
+});
+
+// ── Stiker: GIF, WebP animasi, reply media orang lain, tautan ──────────────
+
+/**
+ * Folder kerja uji di dalam proyek (`tmp/`), bukan Temp sistem: proses ffmpeg
+ * boleh menulis di area proyek, sama seperti saat bot berjalan.
+ */
+const mediaTmpDir = (prefix) => {
+  const dir = path.join(process.cwd(), 'tmp', `${prefix}-${Date.now()}-${Math.round(Math.random() * 1e6)}`);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+};
+
+/** Buat GIF animasi kecil (butuh ffmpeg). */
+async function makeGif(dir, name = 'anim.gif') {
+  const target = path.join(dir, name);
+  await runFfmpeg(
+    ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=size=64x64:rate=10:duration=1', '-y', target],
+    null,
+  );
+  return fs.readFileSync(target);
+}
+
+/** Buat mp4 kecil untuk menguji webp animasi. */
+const makeMp4 = () =>
+  runFfmpeg(
+    [
+      '-hide_banner', '-loglevel', 'error',
+      '-f', 'lavfi', '-i', 'testsrc=size=64x64:rate=10:duration=1',
+      '-pix_fmt', 'yuv420p',
+      '-movflags', 'frag_keyframe+empty_moov',
+      '-f', 'mp4', 'pipe:1',
+    ],
+    null,
+  );
+
+const makePng = (size = 64) =>
+  runFfmpeg(
+    ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', `color=c=red:s=${size}x${size}`, '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'png', 'pipe:1'],
+    null,
+  );
+
+const stickerHarness = () => {
+  const sent = [];
+  const conn = {
+    user: { id: '628999@s.whatsapp.net' },
+    sendMessage: async (_chat, content) => {
+      sent.push(content);
+      return { key: { id: `M${sent.length}` } };
+    },
+  };
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rtxzy-sticker-x-'));
+  attachHelpers(conn, { config: { media: { tmpDir, maxStickerSeconds: 10 }, bot: { packname: 'Uji', author: 'Bot' } } });
+  const config = { bot: { packname: 'Uji', author: 'Bot', prefix: ['.'] }, messages: { stickerWait: '...' }, media: { maxStickerSeconds: 10 } };
+  return { sent, conn, config, tmpDir, sticker: () => sent.map((content) => content.sticker).find(Boolean) };
+};
+
+test('deteksi jenis media dari isi berkas (gif vs webp animasi vs gambar)', async (t) => {
+  if (!ffmpeg) return t.skip('ffmpeg tidak terpasang');
+  const dir = mediaTmpDir('kind');
+
+  const gif = await makeGif(dir);
+  assert.equal(isGif(gif), true, 'GIF tidak terdeteksi');
+  assert.equal((await detectMediaKind(gif)).kind, 'gif');
+
+  const png = await makePng();
+  assert.equal((await detectMediaKind(png)).kind, 'image');
+
+  const animated = await videoToWebp(await makeMp4(), { seconds: 2 });
+  assert.equal(isAnimatedWebp(animated), true, 'webp animasi tidak terdeteksi');
+  assert.equal((await detectMediaKind(animated)).kind, 'animated');
+
+  const staticWebp = await imageToWebp(png);
+  assert.equal(isAnimatedWebp(staticWebp), false);
+  assert.equal((await detectMediaKind(staticWebp)).kind, 'image');
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('plugin .sticker: GIF jadi stiker ANIMASI (bukan statis)', async (t) => {
+  if (!ffmpeg) return t.skip('ffmpeg tidak terpasang');
+  const dir = mediaTmpDir('gif');
+  const gif = await makeGif(dir);
+  const harness = stickerHarness();
+
+  const m = smsg(harness.conn, {
+    key: { remoteJid: '123@g.us', participant: '628111@s.whatsapp.net', fromMe: false, id: 'GIF1' },
+    message: { imageMessage: { mimetype: 'image/gif', fileLength: gif.length, caption: '.s' } },
+    messageTimestamp: 1700000010,
+    pushName: 'Tester',
+  });
+  m.download = async () => gif;
+
+  await stickerPlugin(m, { conn: harness.conn, args: [], command: 'sticker', usedPrefix: '.', config: harness.config });
+
+  const sticker = harness.sticker();
+  assert.ok(sticker, 'stiker tidak terkirim');
+  assert.equal(sticker.subarray(8, 12).toString(), 'WEBP');
+  assert.equal(sticker.includes(Buffer.from('ANIM')), true, 'stiker dari GIF harus animasi (chunk ANIM)');
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(harness.tmpDir, { recursive: true, force: true });
+});
+
+test('plugin .sticker: GIF yang dikirim sebagai dokumen tetap jadi stiker animasi', async (t) => {
+  if (!ffmpeg) return t.skip('ffmpeg tidak terpasang');
+  const dir = mediaTmpDir('gifdoc');
+  const gif = await makeGif(dir);
+  const harness = stickerHarness();
+
+  const m = smsg(harness.conn, {
+    key: { remoteJid: '123@g.us', participant: '628111@s.whatsapp.net', fromMe: false, id: 'GIFDOC1' },
+    // mimetype pesan sengaja tidak jelas -> harus dideteksi dari isi berkas
+    message: { documentMessage: { mimetype: 'application/octet-stream', fileName: 'anim.gif', fileLength: gif.length } },
+    messageTimestamp: 1700000011,
+    pushName: 'Tester',
+  });
+  m.download = async () => gif;
+
+  await stickerPlugin(m, { conn: harness.conn, args: [], command: 'sticker', usedPrefix: '.', config: harness.config });
+  const sticker = harness.sticker();
+  assert.ok(sticker, 'stiker tidak terkirim');
+  assert.equal(sticker.includes(Buffer.from('ANIM')), true, 'GIF dari dokumen harus jadi stiker animasi');
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(harness.tmpDir, { recursive: true, force: true });
+});
+
+test('plugin .sticker: reply gambar milik orang lain', async (t) => {
+  if (!ffmpeg) return t.skip('ffmpeg tidak terpasang');
+  const png = await makePng();
+  const harness = stickerHarness();
+
+  const m = smsg(harness.conn, {
+    key: { remoteJid: '123@g.us', participant: '628222@s.whatsapp.net', fromMe: false, id: 'R1' },
+    message: {
+      extendedTextMessage: {
+        text: '.s',
+        contextInfo: {
+          stanzaId: 'Q1',
+          participant: '628111@s.whatsapp.net',
+          quotedMessage: { imageMessage: { mimetype: 'image/jpeg', fileLength: 4242 } },
+        },
+      },
+    },
+    messageTimestamp: 1700000012,
+    pushName: 'Tester',
+  });
+
+  assert.ok(m.quoted, 'pesan yang di-reply tidak terbentuk');
+  assert.equal(m.quoted.msg.mimetype, 'image/jpeg');
+  m.quoted.download = async () => png;
+
+  await stickerPlugin(m, { conn: harness.conn, args: [], command: 'sticker', usedPrefix: '.', config: harness.config });
+
+  const sticker = harness.sticker();
+  assert.ok(sticker, 'stiker dari reply gambar orang lain tidak terkirim');
+  assert.equal(sticker.subarray(8, 12).toString(), 'WEBP');
+  fs.rmSync(harness.tmpDir, { recursive: true, force: true });
+});
+
+test('plugin .sticker: tautan GIF juga diproses jadi stiker animasi', async (t) => {
+  if (!ffmpeg) return t.skip('ffmpeg tidak terpasang');
+  const dir = mediaTmpDir('gifurl');
+  const gif = await makeGif(dir);
+  const harness = stickerHarness();
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, status: 200, arrayBuffer: async () => gif });
+
+  try {
+    const m = smsg(harness.conn, {
+      key: { remoteJid: '628111@s.whatsapp.net', fromMe: false, id: 'URL1' },
+      message: { conversation: '.s https://example.com/anim.gif' },
+      messageTimestamp: 1700000013,
+      pushName: 'Tester',
+    });
+
+    await stickerPlugin(m, {
+      conn: harness.conn,
+      args: ['https://example.com/anim.gif'],
+      command: 'sticker',
+      usedPrefix: '.',
+      config: harness.config,
+    });
+
+    const sticker = harness.sticker();
+    assert.ok(sticker, 'stiker dari tautan tidak terkirim');
+    assert.equal(sticker.includes(Buffer.from('ANIM')), true, 'GIF dari tautan harus jadi stiker animasi');
+  } finally {
+    globalThis.fetch = originalFetch;
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(harness.tmpDir, { recursive: true, force: true });
+  }
 });
 
 test('audioExtension menebak jenis audio dari magic bytes', () => {

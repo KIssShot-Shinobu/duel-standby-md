@@ -201,29 +201,32 @@ test('jawaban benar: hadiah masuk ke database dan game lanjut', async () => {
   await quiz.stop('chat@g.us', { silent: true });
 });
 
-test('jawaban salah TIDAK mengakhiri ronde (mode teks)', async () => {
+test('jawaban salah: balasan hanya "❌ Salah" dan ronde tetap jalan', async () => {
   const { quiz, sent, card } = makeHarness({ cardIndex: 2, options: { mode: 'teks', maxAttempts: 2 } });
   await quiz.start('chat@g.us', { starter: '6281@s.whatsapp.net', rounds: 1 });
 
   const first = await quiz.handleGuess('chat@g.us', { sender: '6281@s.whatsapp.net', name: 'Tester', text: 'kartu salah' });
   assert.equal(first.correct, false);
-  assert.match(textOf(sent), /Sisa percobaanmu: \*1\*/);
-  assert.equal(quiz.has('chat@g.us'), true, 'ronde tidak boleh berakhir setelah 1 jawaban salah');
+  assert.equal(sent.at(-1).text, '❌ Salah', 'balasan salah harus persis "❌ Salah"');
+  assert.equal(quiz.has('chat@g.us'), true, 'ronde tidak boleh berakhir setelah jawaban salah');
 
   const second = await quiz.handleGuess('chat@g.us', { sender: '6281@s.whatsapp.net', name: 'Tester', text: 'masih salah' });
   assert.equal(second.correct, false);
-  assert.match(textOf(sent), /Percobaanmu di ronde ini habis/);
+  assert.equal(sent.at(-1).text, '❌ Salah');
 
-  // percobaan ketiga: diberi tahu sekali, ronde TETAP jalan
+  // percobaan ketiga: diabaikan tanpa pesan tambahan, ronde TETAP jalan
+  const before = sent.length;
   const third = await quiz.handleGuess('chat@g.us', { sender: '6281@s.whatsapp.net', name: 'Tester', text: 'salah lagi' });
   assert.equal(third.reason, 'no-attempts');
-  assert.match(textOf(sent), /Ronde tetap jalan/);
+  assert.equal(sent.length, before, 'tidak boleh ada pesan tambahan saat percobaan habis');
 
   const state = quiz.get('chat@g.us');
   assert.ok(state, 'game harus masih berjalan');
   assert.equal(state.round, 1, 'tidak boleh lanjut ke ronde berikutnya');
   assert.equal(state.card.name, card.name, 'kartu tidak boleh diganti');
-  assert.doesNotMatch(textOf(sent), /Jawabannya:/, 'jawaban tidak boleh dibuka karena salah');
+  const body = textOf(sent);
+  assert.doesNotMatch(body, /Jawabannya:/, 'jawaban tidak boleh dibuka karena salah');
+  assert.doesNotMatch(body, /Sisa percobaanmu|Percobaanmu di ronde ini habis|Ronde tetap jalan/, 'tidak boleh ada embel-embel');
   await quiz.stop('chat@g.us', { silent: true });
 });
 
@@ -237,6 +240,7 @@ test('pemain lain tetap bisa menjawab setelah pemain pertama salah (pilihan gand
 
   const wrong = await quiz.handleGuess('chat@g.us', { sender: '6281@s.whatsapp.net', name: 'Pemain A', text: wrongLabel });
   assert.equal(wrong.correct, false);
+  assert.match(textOf(sent), /❌ Salah/);
   assert.equal(quiz.get('chat@g.us').card.name, state.card.name, 'kartu tidak boleh diganti setelah salah');
   assert.equal(quiz.get('chat@g.us').round, 1);
 
