@@ -13,6 +13,7 @@
     "dev": "node --watch main.js",
     "smoke": "node main.js --no-connect --health --test",
     "check": "node scripts/check-syntax.js",
+    "check:ytdlp": "node scripts/ytdlp-check.mjs",
     "test": "node --test"
   },
   "keywords": [

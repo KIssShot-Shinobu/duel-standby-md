@@ -9,6 +9,7 @@ Bot **WhatsApp Multi-Device** yang ditulis ulang dari nol (clean-room) dengan ar
 ## 📑 Daftar Isi
 
 - [Fitur](#-fitur)
+- [Analisis repo asal](docs/ANALISIS-RTXZY-MD.md) 📄 *(kenapa proyek ini ditulis ulang)*
 - [Persyaratan](#-persyaratan)
 - [Instalasi](#-instalasi)
 - [Login WhatsApp (pairing code / QR)](#-login-whatsapp)
@@ -16,6 +17,7 @@ Bot **WhatsApp Multi-Device** yang ditulis ulang dari nol (clean-room) dengan ar
 - [Argumen CLI](#-argumen-cli)
 - [Konfigurasi .env](#-konfigurasi-env)
 - [Daftar Command](#-daftar-command)
+- [Downloader YouTube (yt-dlp)](#-downloader-youtube-yt-dlp)
 - [Struktur Folder](#-struktur-folder)
 - [Menulis Plugin Sendiri](#-menulis-plugin-sendiri)
 - [Deployment](#-deployment)
@@ -278,6 +280,54 @@ Prefix default: `.#!/,` (mis. `.menu`, `!ping`).
 | `.afk [alasan]` | Status AFK |
 | `.tqto` | Kredit |
 </details>
+
+---
+
+## 🎬 Downloader YouTube (yt-dlp)
+
+`.ytmp3` dan `.ytmp4` mengunduh langsung dari YouTube memakai **yt-dlp** — gratis, **tanpa API key**. Supaya jalan di panel/VPS, perhatikan 3 hal ini:
+
+**1. yt-dlp harus bisa dipanggil**
+
+```bash
+yt-dlp --version          # kalau keluar versi, berarti siap
+pip install -U yt-dlp     # kalau belum ada
+```
+
+Bot mencari binary di urutan ini: `YTDLP_PATH` (.env) → `/usr/local/bin/yt-dlp` → `/usr/bin/yt-dlp` → `/bin/yt-dlp` → `PATH` → folder proyek. Kalau `yt-dlp` ada tapi tetap tidak terdeteksi, isi path-nya:
+
+```env
+YTDLP_PATH=/usr/local/bin/yt-dlp
+```
+
+**2. Batas ukuran & kualitas**
+
+| Env | Default | Fungsi |
+|---|---|---|
+| `YTDLP_MAX_DURATION` | `900` | Durasi maksimum video (detik) |
+| `YTDLP_MAX_HEIGHT` | `720` | Tinggi maksimum video (progressive mp4) |
+| `MAX_UPLOAD_BYTES` | `67108864` | Batas ukuran file yang dikirim ke WhatsApp (64 MB) |
+
+**3. Kalau YouTube minta verifikasi "bukan bot"**
+
+Beberapa IP server diblokir YouTube. Solusinya pakai cookies dari browser:
+
+```env
+YTDLP_COOKIES=/home/container/cookies.txt
+```
+
+Atau ubah client extractor-nya:
+
+```env
+YTDLP_ARGS=--extractor-args "youtube:player_client=android"
+```
+
+**Catatan teknis:**
+- Audio diunduh sebagai stream asli (m4a/webm) lalu dikonversi ke **mp3 dengan ffmpeg**. Kalau ffmpeg tidak ada, file dikirim apa adanya (m4a) — tetap bisa diputar.
+- Video: bot otomatis memilih strategi sesuai server — kalau **ffmpeg ada**, video & audio diunduh terpisah lalu digabung jadi mp4 (kualitas sampai `YTDLP_MAX_HEIGHT`); kalau **ffmpeg tidak ada**, bot hanya memakai format *progressive* (video+audio menyatu), yang sekarang jarang tersedia di YouTube, sehingga `.ytmp4` bisa gagal dengan pesan yang menjelaskan sebabnya.
+- Unduhan memakai file sementara lalu dihapus otomatis (tidak menumpuk di `tmp/`).
+- Kalau ada error, bot menampilkan pesan penyebabnya (video privat, dibatasi umur, durasi terlalu panjang, masalah jaringan) — bukan crash.
+- Cek cepat di server: **`npm run check:ytdlp`** (uji metadata + unduh audio & video).
 
 ---
 

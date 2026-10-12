@@ -1,8 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { addExif, hasFfmpeg, imageToWebp, runFfmpeg, toAudio, webpToPng } from '../lib/media.js';
-import { smsg, extractText } from '../lib/serialize.js';
+import {
+  addExif,
+  hasFfmpeg,
+  imageToWebp,
+  pickDownloadedFile,
+  resolveYtDlp,
+  runFfmpeg,
+  toAudio,
+  webpToPng,
+} from '../lib/media.js';
+import { extractText, hasMeaningfulContent, smsg } from '../lib/serialize.js';
+import { audioExtension } from '../plugins/downloader-ytmp3.js';
 
 const ffmpeg = hasFfmpeg();
 
@@ -83,4 +93,68 @@ test('smsg membuka ephemeralMessage & mendeteksi mention', () => {
   assert.equal(m.sender, '628111@s.whatsapp.net');
   assert.equal(extractText({ ephemeralMessage: { message: { conversation: 'cek' } } }), 'cek');
   assert.deepEqual(m.mentionedJid, ['628222333444@s.whatsapp.net']);
+});
+
+test('smsg mengutamakan nomor telepon (PN) dibanding LID', () => {
+  const conn = { user: { id: '628999@s.whatsapp.net' } };
+  const m = smsg(conn, {
+    key: {
+      remoteJid: '123@g.us',
+      participant: '271446714642565@lid',
+      participantLid: '271446714642565@lid',
+      participantPn: '6289530694332@s.whatsapp.net',
+      fromMe: false,
+      id: 'X3',
+    },
+    message: { conversation: '.menu' },
+    messageTimestamp: 1700000002,
+    pushName: 'KissShot',
+  });
+
+  assert.equal(m.sender, '6289530694332@s.whatsapp.net');
+  assert.equal(m.senderPn, '6289530694332@s.whatsapp.net');
+  assert.equal(m.senderLid, '271446714642565@lid');
+});
+
+test('hasMeaningfulContent menyaring protocolMessage / senderKeyDistributionMessage', () => {
+  assert.equal(hasMeaningfulContent({ conversation: 'halo' }), true);
+  assert.equal(hasMeaningfulContent({ extendedTextMessage: { text: '.menu' } }), true);
+  assert.equal(hasMeaningfulContent({ imageMessage: { mimetype: 'image/jpeg' } }), true);
+  // SKD + teks asli (pola yang muncul di log panel) -> tetap diproses
+  assert.equal(
+    hasMeaningfulContent({ senderKeyDistributionMessage: { groupId: 'x' }, conversation: '.menu' }),
+    true,
+  );
+  // murni protocol -> diabaikan
+  assert.equal(hasMeaningfulContent({ protocolMessage: { type: 6 } }), false);
+  assert.equal(hasMeaningfulContent({ senderKeyDistributionMessage: { groupId: 'x' } }), false);
+  assert.equal(hasMeaningfulContent({ messageContextInfo: {} }), false);
+  assert.equal(hasMeaningfulContent({}), false);
+});
+
+test('resolveYtDlp: null kalau tidak ada, atau berisi bin+version kalau ada', () => {
+  const resolved = resolveYtDlp('', { refresh: true });
+  if (resolved === null) {
+    assert.equal(resolved, null);
+  } else {
+    assert.equal(typeof resolved.bin, 'string');
+    assert.equal(typeof resolved.version, 'string');
+  }
+});
+
+test('pickDownloadedFile mengabaikan file sementara', () => {
+  assert.equal(pickDownloadedFile([]), null);
+  assert.equal(pickDownloadedFile(['media.m4a.part']), null);
+  assert.equal(pickDownloadedFile(['.hidden', 'media.mp4.ytdl']), null);
+  assert.equal(pickDownloadedFile(['media.m4a']), 'media.m4a');
+  assert.equal(pickDownloadedFile(['media.mp4', 'media.mp4.part']), 'media.mp4');
+});
+
+test('audioExtension menebak jenis audio dari magic bytes', () => {
+  assert.equal(audioExtension(Buffer.concat([Buffer.from('ID3'), Buffer.alloc(20)])), 'mp3');
+  assert.equal(audioExtension(Buffer.concat([Buffer.from([0xff, 0xfb]), Buffer.alloc(14)])), 'mp3');
+  assert.equal(audioExtension(Buffer.concat([Buffer.from([0x00, 0x00, 0x00, 0x20]), Buffer.from('ftypM4A '), Buffer.alloc(4)])), 'm4a');
+  assert.equal(audioExtension(Buffer.concat([Buffer.from('OggS'), Buffer.alloc(12)])), 'ogg');
+  assert.equal(audioExtension(Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])), 'webm');
+  assert.equal(audioExtension(Buffer.alloc(4)), 'm4a');
 });

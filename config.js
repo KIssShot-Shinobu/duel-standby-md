@@ -107,6 +107,9 @@ export const config = {
   ytdlp: {
     path: env('YTDLP_PATH', ''),
     maxDurationSeconds: envNumber('YTDLP_MAX_DURATION', 900),
+    maxHeight: envNumber('YTDLP_MAX_HEIGHT', 720),
+    cookies: env('YTDLP_COOKIES', ''),
+    extraArgs: env('YTDLP_ARGS', ''),
   },
 
   limits: {

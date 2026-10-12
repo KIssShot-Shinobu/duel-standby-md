@@ -73,8 +73,31 @@ test('database: initDatabase menambah hitungan start', async () => {
   db.close();
 });
 
-test('permissions: limit, premium, dan level', () => {
+test('database: pemetaan LID -> nomor telepon', () => {
   const dir = tmpDir();
+  const db = new Database(path.join(dir, 'database.json'), { saveInterval: 5, logger: { warn() {}, error() {} } });
+  db.load();
+
+  const lid = '271446714642565@lid';
+  const pn = '6289530694332@s.whatsapp.net';
+
+  // sebelum dipetakan, jid LID dibiarkan apa adanya
+  assert.equal(db.resolveLid(lid), lid);
+  assert.equal(db.resolveLid(pn), pn);
+
+  db.user(lid).saldo = 99;
+  assert.equal(db.mapLid(lid, pn), true);
+  assert.equal(db.resolveLid(lid), pn);
+  // data user ikut dipindahkan ke jid nomor telepon
+  assert.equal(db.user(pn).saldo, 99);
+  assert.equal(db.data.users[lid], undefined);
+  // pemetaan ulang tidak dianggap perubahan
+  assert.equal(db.mapLid(lid, pn), false);
+
+  db.close();
+});
+
+test('permissions: limit, premium, dan level', () => {  const dir = tmpDir();
   const db = new Database(path.join(dir, 'database.json'), { saveInterval: 5, logger: { warn() {}, error() {} } });
   db.load();
   const config = { limits: { free: 10, premium: 50, resetIntervalMs: 86400000 }, bot: { premiumJids: [], owners: [] } };

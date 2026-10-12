@@ -131,6 +131,31 @@ test('anti-link tidak mengganggu pesan grup biasa', async () => {
   db.close();
 });
 
+test('pesan tanpa konten nyata (protocolMessage) diabaikan', async () => {
+  const { db, plugins, conn } = await setup();
+  const protocolOnly = {
+    key: { remoteJid: '80144945410195@lid', fromMe: false, id: 'P1', participant: '80144945410195@lid' },
+    message: { protocolMessage: { type: 6, key: { id: 'X' } } },
+    messageTimestamp: Math.floor(Date.now() / 1000),
+  };
+  const result = await handleMessage(conn, protocolOnly, { plugins, db, config, logger: quiet });
+  assert.equal(result.handled, false);
+  assert.equal(result.reason, 'no-content');
+
+  // senderKeyDistributionMessage + teks asli tetap harus diproses
+  const withText = {
+    key: { remoteJid: '123@g.us', fromMe: false, id: 'P2', participant: '271446714642565@lid', participantPn: '628111222333@s.whatsapp.net' },
+    message: { senderKeyDistributionMessage: { groupId: 'x' }, conversation: '.calc 3*3' },
+    messageTimestamp: Math.floor(Date.now() / 1000),
+    pushName: 'LID User',
+  };
+  const ok = await handleMessage(conn, withText, { plugins, db, config, logger: quiet });
+  assert.equal(ok.handled, true);
+  // pengirim sudah dikonversi ke nomor telepon, bukan LID
+  assert.ok(db.data.users['628111222333@s.whatsapp.net']);
+  db.close();
+});
+
 test('pesan dari chat yang di-mute diabaikan', async () => {
   const { db, plugins, conn } = await setup();
   db.chat('123@g.us').mute = true;

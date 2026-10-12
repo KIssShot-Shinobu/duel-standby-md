@@ -8,7 +8,7 @@
  *   4. command : cocokkan prefix + nama command ke plugin, lalu jalankan
  *   5. all     : hook `handler.all` dijalankan untuk pesan tanpa command
  */
-import { smsg } from './lib/serialize.js';
+import { smsg, hasMeaningfulContent } from './lib/serialize.js';
 import * as Perm from './lib/permissions.js';
 import { Func, cleanJid } from './lib/functions.js';
 import print from './lib/print.js';
@@ -98,6 +98,21 @@ export async function handleMessage(conn, raw, deps) {
 
   const m = smsg(conn, raw);
   if (!m) return { handled: false, reason: 'unserializable' };
+
+  // WhatsApp kadang mengirim protocolMessage / senderKeyDistributionMessage
+  // tanpa teks apa pun — jangan diproses sebagai pesan user.
+  if (!hasMeaningfulContent(raw.message)) return { handled: false, reason: 'no-content' };
+
+  // Selesaikan identitas LID -> nomor telepon supaya permission konsisten.
+  if (m.senderLid && m.senderPn) db.mapLid(m.senderLid, m.senderPn);
+  if (String(m.sender).endsWith('@lid')) {
+    const resolved = db.resolveLid(m.sender);
+    if (resolved !== m.sender) {
+      m.senderLid = m.senderLid || m.sender;
+      m.sender = resolved;
+    }
+  }
+  m.mentionedJid = [...new Set((m.mentionedJid || []).map((jid) => db.resolveLid(jid)))];
 
   db.data.stats.messages = (db.data.stats.messages || 0) + 1;
   const chat = db.chat(m.chat);
