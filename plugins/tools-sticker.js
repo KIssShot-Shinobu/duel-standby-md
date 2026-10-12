@@ -14,28 +14,14 @@
  */
 import fs from 'node:fs';
 import { detectMediaKind, webpEncoder } from '../lib/media.js';
-import { fetchBuffer, isUrl } from '../lib/functions.js';
+import { loadMedia, mediaMime, pickMediaSource } from '../lib/media-source.js';
 import { userError } from '../lib/errors.js';
 
 const IMAGE_MIME = /image\/(jpe?g|png|webp|gif|bmp|tiff)/i;
 const VIDEO_MIME = /video\//i;
 
-/** Ambil sumber media: tautan > pesan yang di-reply > pesan yang dikirim. */
-function pickSource(m, args = []) {
-  const urlArg = [...(args || []), String(m.text || '')]
-    .map((value) => String(value).trim())
-    .find((value) => isUrl(value));
-  if (urlArg) return { kind: 'url', url: urlArg, label: urlArg };
-
-  if (m.quoted?.msg?.mimetype) return { kind: 'quoted', node: m.quoted, label: 'media yang di-reply' };
-  if (m.msg?.mimetype) return { kind: 'self', node: m, label: 'media yang dikirim' };
-  // pesan lama/dokumen: tetap coba selama ada isi media
-  if (m.quoted?.msg) return { kind: 'quoted', node: m.quoted, label: 'media yang di-reply' };
-  return null;
-}
-
 const handler = async (m, { conn, args, command, usedPrefix, config }) => {
-  const source = pickSource(m, args);
+  const source = pickMediaSource(m, { args, text: m.text });
 
   if (!source) {
     throw userError(
@@ -53,18 +39,15 @@ const handler = async (m, { conn, args, command, usedPrefix, config }) => {
   }
 
   const content = source.kind === 'url' ? {} : source.node.msg || {};
-  const messageMime = content.mimetype || '';
+  const messageMime = mediaMime(source) || '';
 
-  const packname = args.filter((arg) => !isUrl(arg)).join(' ').trim() || config.bot.packname;
+  const packname = args.filter((arg) => !/^https?:\/\//i.test(arg)).join(' ').trim() || config.bot.packname;
   const options = { packname, author: config.bot.author };
   const maxSeconds = config.media.maxStickerSeconds;
 
   await m.reply(config.messages.stickerWait);
 
-  const buffer =
-    source.kind === 'url'
-      ? await fetchBuffer(source.url, { timeout: 30000 })
-      : await source.node.download();
+  const buffer = await loadMedia(source);
 
   if (!buffer?.length) throw userError('❌ Gagal mengunduh media (berkas kosong). Coba kirim ulang.');
 

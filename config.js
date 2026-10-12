@@ -27,7 +27,7 @@ const premiums = toNumbers(envList('PREMIUM_NUMBER', []));
 export const config = {
   root: ROOT,
   /** Metadata proses */
-  version: '1.1.6',
+  version: '1.1.7',
   startedAt: Date.now(),
 
   bot: {
@@ -90,6 +90,8 @@ export const config = {
     tmpDir: path.resolve(ROOT, env('TMP_DIR', 'tmp')),
     maxStickerSeconds: envNumber('MAX_STICKER_SECONDS', 10),
     maxUploadBytes: envNumber('MAX_UPLOAD_BYTES', 64 * 1024 * 1024),
+    /** Font untuk fitur meme (.smeme) — kosong = deteksi otomatis */
+    fontPath: env('FFMPEG_FONT', ''),
   },
 
   api: {

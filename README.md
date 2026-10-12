@@ -251,13 +251,28 @@ Prefix default: `.#!/,` (mis. `.menu`, `!ping`).
 
 | Command | Fungsi |
 |---|---|
-| `.sticker [namapack]` | Gambar/video → stiker |
+| `.sticker [namapack]` | Gambar/video/GIF → stiker (GIF tetap animasi) |
+| `.smeme atas\|bawah` | **Stiker meme**: teks di atas & bawah gambar (render lokal ffmpeg) |
 | `.toimg` | Stiker → gambar (png) |
 | `.tovn` | Audio/video → voice note |
 | `.tomp3` | Audio/video → mp3 |
 | `.qr <teks>` | Buat QR code |
 | `.calc <ekspresi>` | Kalkulator aman (tanpa `eval`) |
 </details>
+
+### 🎨 Stiker & Meme
+
+| Perintah | Fungsi |
+|---|---|
+| `.sticker` / `.s` | Gambar, video (≤10 dtk), **GIF**, atau reply media siapa pun → stiker. GIF/WebP animasi tetap **animasi** |
+| `.s https://.../x.gif` | Stiker dari tautan |
+| `.smeme teks atas\|teks bawah` | **Stiker meme** dari gambar/GIF/reply, gaya memegen |
+
+**Tentang `.smeme`:** di project asli (RTXZY-MD) fitur ini **mengunggah gambarmu ke API pihak ketiga** (`file.botcahx.eu.org`) lalu meminta memegen.link merender meme-nya. Di sini dirender **lokal dengan ffmpeg `drawtext`** — tidak ada gambar yang dikirim ke layanan lain, dan tetap jalan walau internet mati.
+
+- Teks otomatis di-*wrap* (maks 3 baris) dan ukuran font menyesuaikan panjang teks.
+- Butuh ffmpeg dengan `drawtext` + satu berkas font. Kalau font tidak ketemu: `apt install fonts-dejavu-core`, atau set `FFMPEG_FONT=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf` di `.env`.
+- Cek cepat di server: `ffmpeg -filters | grep drawtext`.
 
 <details>
 <summary><b>downloader</b></summary>
