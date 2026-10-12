@@ -124,6 +124,7 @@ export const config = {
       timeoutMs: envNumber('YGO_QUIZ_TIMEOUT', 60000),
       hintDelayMs: envNumber('YGO_QUIZ_HINT_DELAY', 20000),
       maxAttempts: envNumber('YGO_QUIZ_ATTEMPTS', 3),
+      choiceAttempts: envNumber('YGO_QUIZ_CHOICE_ATTEMPTS', 1),
       roundDelayMs: envNumber('YGO_QUIZ_ROUND_DELAY', 2500),
       rewardSaldo: envNumber('YGO_QUIZ_REWARD', 500),
       rewardExp: envNumber('YGO_QUIZ_EXP', 25),

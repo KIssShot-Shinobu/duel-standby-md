@@ -201,22 +201,53 @@ test('jawaban benar: hadiah masuk ke database dan game lanjut', async () => {
   await quiz.stop('chat@g.us', { silent: true });
 });
 
-test('jawaban salah: sisa percobaan berkurang, lalu jawaban dibuka', async () => {
+test('jawaban salah TIDAK mengakhiri ronde (mode teks)', async () => {
   const { quiz, sent, card } = makeHarness({ cardIndex: 2, options: { mode: 'teks', maxAttempts: 2 } });
   await quiz.start('chat@g.us', { starter: '6281@s.whatsapp.net', rounds: 1 });
 
   const first = await quiz.handleGuess('chat@g.us', { sender: '6281@s.whatsapp.net', name: 'Tester', text: 'kartu salah' });
   assert.equal(first.correct, false);
-  assert.match(textOf(sent), /Sisa percobaan: \*1\*/);
+  assert.match(textOf(sent), /Sisa percobaanmu: \*1\*/);
+  assert.equal(quiz.has('chat@g.us'), true, 'ronde tidak boleh berakhir setelah 1 jawaban salah');
 
   const second = await quiz.handleGuess('chat@g.us', { sender: '6281@s.whatsapp.net', name: 'Tester', text: 'masih salah' });
   assert.equal(second.correct, false);
-  assert.match(textOf(sent), new RegExp(`Jawabannya: \\*${card.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\*`));
+  assert.match(textOf(sent), /Percobaanmu di ronde ini habis/);
 
-  // ronde terakhir -> game selesai dan state dibersihkan
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(quiz.has('chat@g.us'), false);
-  assert.match(textOf(sent), /Game selesai/);
+  // percobaan ketiga: diberi tahu sekali, ronde TETAP jalan
+  const third = await quiz.handleGuess('chat@g.us', { sender: '6281@s.whatsapp.net', name: 'Tester', text: 'salah lagi' });
+  assert.equal(third.reason, 'no-attempts');
+  assert.match(textOf(sent), /Ronde tetap jalan/);
+
+  const state = quiz.get('chat@g.us');
+  assert.ok(state, 'game harus masih berjalan');
+  assert.equal(state.round, 1, 'tidak boleh lanjut ke ronde berikutnya');
+  assert.equal(state.card.name, card.name, 'kartu tidak boleh diganti');
+  assert.doesNotMatch(textOf(sent), /Jawabannya:/, 'jawaban tidak boleh dibuka karena salah');
+  await quiz.stop('chat@g.us', { silent: true });
+});
+
+test('pemain lain tetap bisa menjawab setelah pemain pertama salah (pilihan ganda)', async () => {
+  const { quiz, sent, db } = makeHarness({ cardIndex: 0, options: { rounds: 1, mode: 'pilihan', choiceAttempts: 1 } });
+  await quiz.start('chat@g.us', { starter: '6281@s.whatsapp.net', rounds: 1 });
+
+  const state = quiz.get('chat@g.us');
+  const wrongLabel = state.choices.find((choice) => !choice.correct).label;
+  const correctLabel = state.choices.find((choice) => choice.correct).label;
+
+  const wrong = await quiz.handleGuess('chat@g.us', { sender: '6281@s.whatsapp.net', name: 'Pemain A', text: wrongLabel });
+  assert.equal(wrong.correct, false);
+  assert.equal(quiz.get('chat@g.us').card.name, state.card.name, 'kartu tidak boleh diganti setelah salah');
+  assert.equal(quiz.get('chat@g.us').round, 1);
+
+  const right = await quiz.handleGuess('chat@g.us', { sender: '6282@s.whatsapp.net', name: 'Pemain B', text: correctLabel });
+  assert.equal(right.correct, true, 'pemain lain harus bisa menjawab benar');
+
+  const winner = db.user('6282@s.whatsapp.net');
+  assert.equal(winner.saldo, 500, 'pemenang mendapat hadiah');
+  assert.equal(db.user('6281@s.whatsapp.net').saldo, 0, 'yang salah tidak mendapat hadiah');
+  assert.equal(quiz.has('chat@g.us'), false, 'ronde terakhir selesai setelah ada yang benar');
+  assert.match(textOf(sent), /BENAR/);
 });
 
 test('mode teks: jawaban dengan salah ketik tetap diterima', async () => {

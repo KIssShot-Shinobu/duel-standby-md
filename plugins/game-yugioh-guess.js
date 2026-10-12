@@ -27,6 +27,7 @@ function buildOptions(config) {
     timeoutMs: options.timeoutMs,
     hintDelayMs: options.hintDelayMs,
     maxAttempts: options.maxAttempts,
+    choiceAttempts: options.choiceAttempts,
     roundDelayMs: options.roundDelayMs,
     reward: { saldo: options.rewardSaldo, exp: options.rewardExp, limit: options.rewardLimit },
   };

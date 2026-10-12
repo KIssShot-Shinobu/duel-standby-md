@@ -396,8 +396,10 @@ Bot mengirim **art crop** kartu (`image_url_cropped`) — jadi **nama kartu tida
 | `.yugoscore` | Papan skor 10 penebak terbaik |
 
 **Aturan & hadiah**
-- Pilihan ganda: 1 percobaan per pemain per ronde (jawab `A`/`B`/`C`/`D` **atau** tulis namanya).
-- Mode teks: maksimal 3 percobaan; petunjuk muncul di detik ke-20 (awalan + jumlah huruf) dan ke-40 (tipe/atribut/archetype).
+- 🔁 **Jawaban salah tidak mengakhiri ronde.** Ronde hanya berakhir kalau ada yang menjawab benar atau waktu habis — jadi satu grup bisa menebak bergantian sampai ada yang kena.
+- Pilihan ganda: **1 percobaan per pemain per ronde** (`YGO_QUIZ_CHOICE_ATTEMPTS`), supaya tidak bisa brute-force A–D dengan menebak semua huruf. Jawab `A`/`B`/`C`/`D` **atau** tulis namanya.
+- Mode teks: **3 percobaan per pemain** (`YGO_QUIZ_ATTEMPTS`); petunjuk muncul di detik ke-20 (awalan + jumlah huruf) dan ke-40 (tipe/atribut/archetype).
+- Pemain yang percobaannya habis diberi tahu **sekali**, lalu tebakannya diabaikan — ronde tetap jalan untuk pemain lain.
 - Jawaban benar → **+500 saldo, +25 exp, +1 limit** (bisa diatur lewat env) dan dihitung di `.yugoscore`.
 - Default 60 detik per ronde; waktu habis → jawaban dibuka otomatis dan lanjut ronde berikutnya.
 - Jawaban toleran salah ketik (mis. `dark magican` tetap benar) dan passcode kartu juga diterima.
@@ -412,7 +414,8 @@ Bot mengirim **art crop** kartu (`image_url_cropped`) — jadi **nama kartu tida
 | `YGO_QUIZ_MODE` | `pilihan` | Mode default (`pilihan`/`teks`) |
 | `YGO_QUIZ_TIMEOUT` | `60000` | Durasi per ronde (ms) |
 | `YGO_QUIZ_HINT_DELAY` | `20000` | Jeda petunjuk pertama (ms) |
-| `YGO_QUIZ_ATTEMPTS` | `3` | Percobaan maksimum di mode teks |
+| `YGO_QUIZ_ATTEMPTS` | `3` | Percobaan maksimum per pemain di mode teks |
+| `YGO_QUIZ_CHOICE_ATTEMPTS` | `1` | Percobaan per pemain di mode pilihan ganda |
 | `YGO_QUIZ_ROUND_DELAY` | `2500` | Jeda antar ronde (ms) |
 | `YGO_QUIZ_REWARD` / `YGO_QUIZ_EXP` / `YGO_QUIZ_LIMIT` | `500` / `25` / `1` | Hadiah jawaban benar |
 
