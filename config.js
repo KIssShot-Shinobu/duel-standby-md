@@ -27,7 +27,7 @@ const premiums = toNumbers(envList('PREMIUM_NUMBER', []));
 export const config = {
   root: ROOT,
   /** Metadata proses */
-  version: '1.1.4',
+  version: '1.1.5',
   startedAt: Date.now(),
 
   bot: {
