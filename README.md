@@ -22,6 +22,7 @@ Bot **WhatsApp Multi-Device** yang ditulis ulang dari nol (clean-room) dengan ar
   - [Game: Tebak Kartu](#-game-tebak-kartu-yu-gi-oh)
 - [Pengaturan Menu (Owner)](#-pengaturan-menu-owner)
 - [Pengaturan Limit (Owner)](#-pengaturan-limit-owner)
+- [Hadiah Tiap Pesan (XP & Saldo)](#-hadiah-tiap-pesan-xp--saldo)
 - [Troubleshooting](#-troubleshooting)
 - [Struktur Folder](#-struktur-folder)
 - [Menulis Plugin Sendiri](#-menulis-plugin-sendiri)
@@ -40,7 +41,7 @@ Bot **WhatsApp Multi-Device** yang ditulis ulang dari nol (clean-room) dengan ar
 | **Koneksi** | Baileys multi-device, login **pairing code** (default) atau **QR** (`--qr`), auto-reconnect dengan backoff, deteksi sesi logout |
 | **Plugin engine** | Auto-load `plugins/*.js`, **hot reload** saat file diubah, index command (literal + regex), kategori otomatis, deteksi command dobel |
 | **Permission** | Owner / mods / premium / admin grup / bot admin / grup-only / private-only / wajib daftar / banned / mute / expired |
-| **Ekonomi** | Limit harian (auto reset), exp & level, saldo, bank, daily reward, leaderboard |
+| **Ekonomi** | Limit harian (auto reset), exp & level, saldo, bank, daily reward, leaderboard, **hadiah tiap pesan (xp & saldo acak 1–9)** |
 | **Database** | JSON dengan **penulisan atomik** (tmp → rename), debounce save, auto-backup file rusak, skema user & chat otomatis |
 | **Media** | Stiker (gambar & video) + metadata EXIF, stiker → gambar, audio/video → mp3, → voice note — semua lewat **ffmpeg**, tanpa dependency native |
 | **Downloader** | YouTube (yt-dlp, tanpa API key), pencarian YouTube (yt-search), TikTok tanpa watermark |
@@ -523,6 +524,30 @@ Tiga lapis pengaman yang sudah dipasang:
 Sudah diuji: proses yang menerapkan 4 pengaturan lalu **dibunuh paksa (SIGKILL)** — saat dijalankan ulang, semuanya masih utuh.
 
 > ⚠️ Yang perlu dijaga: folder **`database/`** harus persisten. Kalau panel mengganti container dari awal / kamu menghapus folder itu, pengaturan (dan data user) ikut hilang. Di Docker sudah otomatis jadi volume (`docker-compose.yml`); kalau pindah server, backup `database/` dan `sessions/`.
+
+## 💬 Hadiah Tiap Pesan (XP & Saldo)
+
+Setiap pesan dari user langsung mendapat **XP dan saldo acak 1–9** (keduanya diundi terpisah), tanpa balasan apa pun supaya chat tidak berisik:
+
+```
+pesan 1 : +8 xp, +8 saldo   -> total   8 xp,   8 saldo
+pesan 2 : +8 xp, +7 saldo   -> total  16 xp,  15 saldo
+pesan 3 : +5 xp, +3 saldo   -> total  21 xp,  18 saldo
+...
+2 pesan = ~16 xp, 20 pesan = ~100 xp (rata-rata 5 xp & 5 saldo per pesan)
+```
+
+- Naik level otomatis diumumkan singkat ke chat: `🎉 *Nama* naik ke *level 2*` (level = `floor(sqrt(exp/100))` → level 1 di 100 xp, level 2 di 400 xp).
+- Hasilnya terlihat di `.profile` (exp, level, saldo) dan `.leaderboard`.
+- **Tidak** diberi untuk: pesan bot sendiri, chat yang di-*mute*, user yang diblokir, dan pesan yang dihentikan hook (mis. anti-spam/anti-link).
+
+| Env | Default | Fungsi |
+|---|---|---|
+| `CHAT_REWARD` | `true` | Matikan dengan `"false"` |
+| `CHAT_XP_MIN` / `CHAT_XP_MAX` | `1` / `9` | Rentang XP per pesan |
+| `CHAT_SALDO_MIN` / `CHAT_SALDO_MAX` | `1` / `9` | Rentang saldo per pesan |
+| `CHAT_REWARD_COOLDOWN` | `0` | Jeda minimum antar hadiah per user (ms). Naikkan (mis. `5000`) untuk mencegah farming |
+| `CHAT_LEVELUP_NOTICE` | `true` | Kirim pesan saat naik level |
 
 ## 🩹 Troubleshooting
 

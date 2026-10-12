@@ -27,7 +27,7 @@ const premiums = toNumbers(envList('PREMIUM_NUMBER', []));
 export const config = {
   root: ROOT,
   /** Metadata proses */
-  version: '1.2.0',
+  version: '1.2.1',
   startedAt: Date.now(),
 
   bot: {
@@ -147,6 +147,21 @@ export const config = {
     premium: envNumber('LIMIT_PREMIUM', 100),
     resetIntervalMs: 24 * 60 * 60 * 1000,
     premiumDays: envNumber('PREMIUM_DAYS', 30),
+  },
+
+  /** Hadiah tiap pesan chat (XP & saldo acak) */
+  rewards: {
+    chat: {
+      enabled: env('CHAT_REWARD', 'true') !== 'false',
+      expMin: envNumber('CHAT_XP_MIN', 1),
+      expMax: envNumber('CHAT_XP_MAX', 9),
+      saldoMin: envNumber('CHAT_SALDO_MIN', 1),
+      saldoMax: envNumber('CHAT_SALDO_MAX', 9),
+      /** jeda minimum antar hadiah per user (ms). 0 = tiap pesan dapat hadiah */
+      cooldownMs: envNumber('CHAT_REWARD_COOLDOWN', 0),
+      /** kirim pesan saat user naik level */
+      levelUpNotice: env('CHAT_LEVELUP_NOTICE', 'true') !== 'false',
+    },
   },
 
   health: {

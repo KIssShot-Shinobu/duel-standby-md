@@ -164,6 +164,19 @@ export async function handleMessage(conn, raw, deps) {
   print.printMessage({ ...m, timeZone: config.bot.timezone });
   db.touch();
 
+  // 1b) Hadiah tiap pesan: XP & saldo acak (config.rewards.chat)
+  const rewardEnabled = !m.fromMe && !ctx.user.banned && !(chat.mute && !isOwner && !isAdmin);
+  const reward = rewardEnabled ? Perm.rewardChatMessage(db, m.sender, config) : null;
+  if (reward) {
+    m.exp = reward.exp;
+    m.saldo = reward.saldo;
+    if (reward.levelUp && config.rewards?.chat?.levelUpNotice) {
+      await m
+        .reply(`🎉 *${m.pushName || m.sender.split('@')[0]}* naik ke *level ${reward.level}*`, m.chat, { mentions: [m.sender] })
+        .catch(() => {});
+    }
+  }
+
   // 2) Cari plugin
   let entry = parsed ? matchPlugin(plugins, parsed.command) : null;
 
@@ -190,28 +203,28 @@ export async function handleMessage(conn, raw, deps) {
         logger.error?.(`[handler] all ${hook.name}: ${errorLog(err)}`);
       }
     }
-    return { handled: false, reason: 'no-plugin' };
+    return { handled: false, reason: 'no-plugin', reward };
   }
 
   // 4) Gating
-  if (config.bot.mode === 'self' && !isOwner && !isMods) return { handled: false, reason: 'self-mode' };
-  if (config.flags.pcOnly && isGroup) return { handled: false, reason: 'pconly' };
-  if (config.flags.gcOnly && !isGroup) return { handled: false, reason: 'gconly' };
+  if (config.bot.mode === 'self' && !isOwner && !isMods) return { handled: false, reason: 'self-mode', reward };
+  if (config.flags.pcOnly && isGroup) return { handled: false, reason: 'pconly', reward };
+  if (config.flags.gcOnly && !isGroup) return { handled: false, reason: 'gconly', reward };
 
   // Menu config: command/kategori yang dimatikan owner tidak boleh dijalankan.
   if (!pluginEnabled(db, entry)) {
     // Kategori dewasa (nsfw) yang masih tertutup diabaikan diam-diam.
-    if (isAdultCategory(entry.category)) return { handled: false, reason: 'adult-disabled' };
+    if (isAdultCategory(entry.category)) return { handled: false, reason: 'adult-disabled', reward };
     await m.reply(config.messages.disabled || '_*Fitur ini sedang dimatikan oleh owner.*_').catch(() => {});
-    return { handled: false, reason: 'disabled' };
+    return { handled: false, reason: 'disabled', reward };
   }
 
   if (ctx.user.banned) {
     await m.reply(config.messages.banned).catch(() => {});
-    return { handled: false, reason: 'banned' };
+    return { handled: false, reason: 'banned', reward };
   }
-  if (chat.mute && !isOwner && !isAdmin) return { handled: false, reason: 'muted' };
-  if (chat.expired && Date.now() > chat.expired && !isOwner) return { handled: false, reason: 'expired-chat' };
+  if (chat.mute && !isOwner && !isAdmin) return { handled: false, reason: 'muted', reward };
+  if (chat.expired && Date.now() > chat.expired && !isOwner) return { handled: false, reason: 'expired-chat', reward };
 
   const plugin = entry.plugin;
   if (plugin.owner && !isOwner) {
@@ -251,7 +264,7 @@ export async function handleMessage(conn, raw, deps) {
   const limit = Perm.consumeLimitCost(db, user, limitInfo.cost, config);
   if (!limit.ok) {
     await m.reply(config.messages.limit).catch(() => {});
-    return { handled: false, reason: 'no-limit' };
+    return { handled: false, reason: 'no-limit', reward };
   }
 
   // 5) Jalankan
@@ -264,11 +277,9 @@ export async function handleMessage(conn, raw, deps) {
   try {
     const started = Date.now();
     await plugin.call(plugin, m, ctx);
-    const { levelUp } = Perm.addExp(db, m.sender, 5);
-    m.exp = 5;
-    if (levelUp) m.reply(`🎉 Selamat! Kamu naik ke *level ${Perm.levelFromExp(user.exp)}*`).catch(() => {});
+    // EXP sudah diberikan tiap pesan (lihat rewardChatMessage), jadi tidak ada bonus terpisah.
     logger.debug?.(`[handler] ${entry.name} selesai dalam ${Date.now() - started} ms`);
-    return { handled: true, plugin: entry.name, command: ctx.command, limit: limit.cost, upsertType };
+    return { handled: true, plugin: entry.name, command: ctx.command, limit: limit.cost, upsertType, reward };
   } catch (err) {
     db.data.stats.errors = (db.data.stats.errors || 0) + 1;
     db.touch();
