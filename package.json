@@ -1,6 +1,6 @@
 {
   "name": "rtxzy-md-clean",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Clean-room WhatsApp Multi-Device bot (Baileys) dengan arsitektur plugin bergaya RTXZY-MD",
   "type": "module",
   "main": "index.js",
@@ -14,6 +14,7 @@
     "smoke": "node main.js --no-connect --health --test",
     "check": "node scripts/check-syntax.js",
     "check:ytdlp": "node scripts/ytdlp-check.mjs",
+    "check:sticker": "node scripts/sticker-check.mjs",
     "test": "node --test"
   },
   "keywords": [

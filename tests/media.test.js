@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
+import { attachHelpers } from '../lib/simple.js';
 import {
   addExif,
   hasFfmpeg,
@@ -11,8 +15,9 @@ import {
   toAudio,
   webpToPng,
 } from '../lib/media.js';
-import { extractText, hasMeaningfulContent, smsg } from '../lib/serialize.js';
+import { extractText, detectType, hasMeaningfulContent, smsg } from '../lib/serialize.js';
 import { audioExtension } from '../plugins/downloader-ytmp3.js';
+import stickerPlugin from '../plugins/tools-sticker.js';
 
 const ffmpeg = hasFfmpeg();
 
@@ -140,6 +145,157 @@ test('resolveYtDlp: null kalau tidak ada, atau berisi bin+version kalau ada', ()
     assert.equal(typeof resolved.bin, 'string');
     assert.equal(typeof resolved.version, 'string');
   }
+});
+
+test('detectType & mtype tetap benar walau senderKeyDistributionMessage di depan', () => {
+  const content = {
+    senderKeyDistributionMessage: { groupId: 'x' },
+    imageMessage: { mimetype: 'image/jpeg', fileLength: 100 },
+  };
+  // bug lama: key pertama (SKD) dianggap tipe media -> stiker gagal
+  assert.equal(detectType(content), 'image');
+  const built = smsg(
+    { user: { id: '6289@s.whatsapp.net' } },
+    {
+      key: { remoteJid: '123@g.us', participant: '6281@s.whatsapp.net', id: 'X', fromMe: false },
+      message: content,
+      messageTimestamp: 1,
+    },
+  );
+  assert.equal(built.mtype, 'imageMessage');
+  // m.msg = konten dalam, sehingga m.msg.mimetype tersedia (dipakai plugin stiker)
+  assert.equal(built.msg.mimetype, 'image/jpeg');
+  assert.equal(built.content.imageMessage.mimetype, 'image/jpeg');
+  assert.equal(detectType({ senderKeyDistributionMessage: { groupId: 'x' } }), null);
+});
+
+test('plugin .sticker mengubah gambar menjadi webp (butuh ffmpeg)', async (t) => {
+  if (!ffmpeg) return t.skip('ffmpeg tidak terpasang');
+
+  const png = await runFfmpeg(
+    ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=96x96', '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'png', 'pipe:1'],
+    null,
+  );
+
+  // Skenario asli: pesan grup berisi senderKeyDistributionMessage + imageMessage
+  const sent = [];
+  const conn = {
+    user: { id: '628999@s.whatsapp.net' },
+    sendMessage: async (_chat, content) => {
+      sent.push(content);
+      return { key: { id: `MSG${sent.length}` } };
+    },
+  };
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rtxzy-sticker-'));
+  attachHelpers(conn, { config: { media: { tmpDir }, bot: { packname: 'Uji', author: 'Bot' } } });
+
+  const m = smsg(conn, {
+    key: { remoteJid: '123@g.us', participant: '628111@s.whatsapp.net', fromMe: false, id: 'IMG1' },
+    message: {
+      senderKeyDistributionMessage: { groupId: 'x' },
+      imageMessage: { mimetype: 'image/jpeg', fileLength: 4242, caption: '.sticker' },
+    },
+    messageTimestamp: 1700000003,
+    pushName: 'Tester',
+  });
+  m.download = async () => png;
+
+  await stickerPlugin(m, {
+    conn,
+    args: [],
+    command: 'sticker',
+    usedPrefix: '.',
+    config: { bot: { packname: 'Uji', author: 'Bot' }, messages: { stickerWait: '...' }, media: { maxStickerSeconds: 10 } },
+  });
+
+  const sticker = sent.map((content) => content.sticker).find(Boolean);
+  assert.ok(sticker, `stiker tidak terkirim (terkirim: ${JSON.stringify(sent.map((c) => Object.keys(c)))} )`);
+  assert.equal(sticker.subarray(8, 12).toString(), 'WEBP');
+  assert.equal(sticker.includes(Buffer.from('sticker-pack-name')), true, 'EXIF packname tidak tertanam');
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+test('plugin .sticker memberi pesan jelas kalau tidak ada media', async () => {
+  let message = '';
+  await assert.rejects(
+    stickerPlugin(
+      { chat: 'x', msg: {}, quoted: null, reply: async () => {} },
+      { conn: {}, args: [], command: 'sticker', usedPrefix: '.', config: { bot: {}, messages: {}, media: {} } },
+    ),
+    (err) => {
+      message = String(err);
+      return /gambar\/video/i.test(message);
+    },
+  );
+  assert.match(message, /gambar\/video/i);
+});
+
+test('plugin .sticker mengubah video menjadi stiker animasi (butuh ffmpeg)', async (t) => {
+  if (!ffmpeg) return t.skip('ffmpeg tidak terpasang');
+
+  const mp4 = await runFfmpeg(
+    [
+      '-hide_banner', '-loglevel', 'error',
+      '-f', 'lavfi', '-i', 'testsrc=size=96x96:rate=10:duration=2',
+      '-pix_fmt', 'yuv420p',
+      '-movflags', 'frag_keyframe+empty_moov',
+      '-f', 'mp4', 'pipe:1',
+    ],
+    null,
+  );
+
+  const sent = [];
+  const conn = {
+    user: { id: '628999@s.whatsapp.net' },
+    sendMessage: async (_chat, content) => {
+      sent.push(content);
+      return { key: { id: `MSG${sent.length}` } };
+    },
+  };
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rtxzy-sticker-vid-'));
+  attachHelpers(conn, { config: { media: { tmpDir, maxStickerSeconds: 10 }, bot: { packname: 'Uji', author: 'Bot' } } });
+
+  const m = smsg(conn, {
+    key: { remoteJid: '123@g.us', participant: '628111@s.whatsapp.net', fromMe: false, id: 'VID1' },
+    message: { videoMessage: { mimetype: 'video/mp4', seconds: 3, fileLength: 9999 } },
+    messageTimestamp: 1700000004,
+    pushName: 'Tester',
+  });
+  m.download = async () => mp4;
+
+  await stickerPlugin(m, {
+    conn,
+    args: [],
+    command: 'sticker',
+    usedPrefix: '.',
+    config: { bot: { packname: 'Uji', author: 'Bot' }, messages: { stickerWait: '...' }, media: { maxStickerSeconds: 10 } },
+  });
+
+  const sticker = sent.map((content) => content.sticker).find(Boolean);
+  assert.ok(sticker, 'stiker video tidak terkirim');
+  assert.equal(sticker.subarray(8, 12).toString(), 'WEBP');
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+test('plugin .sticker menolak video yang terlalu panjang', async () => {
+  const conn = { user: { id: '6289@s.whatsapp.net' }, sendMessage: async () => ({ key: { id: 'M' } }) };
+  const m = smsg(conn, {
+    key: { remoteJid: '628111@s.whatsapp.net', fromMe: false, id: 'VID2' },
+    message: { videoMessage: { mimetype: 'video/mp4', seconds: 45, fileLength: 9999 } },
+    messageTimestamp: 1700000005,
+  });
+  m.download = async () => Buffer.alloc(2048);
+
+  await assert.rejects(
+    stickerPlugin(m, {
+      conn,
+      args: [],
+      command: 'sticker',
+      usedPrefix: '.',
+      config: { bot: { packname: 'Uji', author: 'Bot' }, messages: { stickerWait: '...' }, media: { maxStickerSeconds: 10 } },
+    }),
+    /terlalu panjang/i,
+  );
 });
 
 test('pickDownloadedFile mengabaikan file sementara', () => {

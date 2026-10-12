@@ -1,45 +1,82 @@
 /**
  * Ubah gambar/video menjadi stiker.
- *   .sticker              -> reply/kirim gambar atau video (maks 10 detik)
+ *   .sticker              -> kirim/reply gambar atau video (video maks 10 detik)
  *   .sticker NamaPack     -> set nama pack
+ *
+ * Menerima sumber media dari:
+ *   - pesan yang sedang dikirim (foto/video + caption .sticker)
+ *   - pesan yang di-reply (termasuk foto yang dikirim sebagai dokumen)
  */
 import fs from 'node:fs';
+import { webpEncoder } from '../lib/media.js';
+
+/** Cari pesan yang benar-benar berisi media (reply diprioritaskan). */
+function pickMediaSource(m) {
+  const candidates = [m.quoted, m].filter(Boolean);
+  return candidates.find((item) => item.msg?.mimetype) || null;
+}
 
 const handler = async (m, { conn, args, command, usedPrefix, config }) => {
-  const target = m.quoted && m.quoted.msg?.mimetype ? m.quoted : m;
-  const content = target.msg || {};
-  const mime = content.mimetype || '';
+  const source = pickMediaSource(m);
 
-  if (!mime) {
-    throw `Kirim atau reply gambar/video dengan caption *${usedPrefix}${command}*\nDurasi video maksimal ${config.media.maxStickerSeconds} detik.`;
+  if (!source) {
+    throw [
+      `Kirim atau reply *gambar/video* dengan caption *${usedPrefix}${command}*`,
+      '',
+      `Contoh: kirim foto + caption ${usedPrefix}${command}`,
+      `atau reply sebuah foto lalu kirim ${usedPrefix}${command}`,
+    ].join('\n');
+  }
+
+  const content = source.msg || {};
+  const mime = content.mimetype || '';
+  const isImage = /image\/(jpe?g|png|webp|gif|bmp|tiff)/i.test(mime);
+  const isVideo = /video\//i.test(mime);
+
+  if (!isImage && !isVideo) {
+    throw `Tipe media *${mime || 'tidak diketahui'}* belum didukung.\nKirim gambar atau video (maksimal ${config.media.maxStickerSeconds} detik).`;
+  }
+
+  const encoder = webpEncoder();
+  if (!encoder) {
+    throw [
+      '❌ Server belum punya encoder WebP, jadi stiker tidak bisa dibuat.',
+      '',
+      'Pasang salah satu:',
+      '• `apt install ffmpeg` (versi lengkap dengan libwebp)',
+      '• `apt install webp` (menyediakan perintah cwebp)',
+      '',
+      'Cek cepat: `ffmpeg -encoders | grep webp`',
+    ].join('\n');
+  }
+  if (isVideo && encoder !== 'ffmpeg') {
+    throw '❌ Stiker dari video butuh ffmpeg dengan libwebp.\nPasang dengan: `apt install ffmpeg`.';
   }
 
   const packname = args.join(' ').trim() || config.bot.packname;
   await m.reply(config.messages.stickerWait);
 
-  if (/image\/(jpe?g|png|webp|gif)/i.test(mime)) {
-    const buffer = await target.download();
-    const file = await conn.sendImageAsSticker(m.chat, buffer, m, { packname, author: config.bot.author });
+  const buffer = await source.download();
+  if (!buffer?.length) throw 'Gagal mengunduh media (file kosong). Coba kirim ulang fotonya.';
+
+  const options = { packname, author: config.bot.author };
+
+  if (isImage) {
+    const file = await conn.sendImageAsSticker(m.chat, buffer, m, options);
     if (file && fs.existsSync(file)) fs.unlinkSync(file);
     return;
   }
 
-  if (/video/i.test(mime)) {
-    const seconds = Number(content.seconds) || 0;
-    if (seconds > config.media.maxStickerSeconds) {
-      throw `Video terlalu panjang (${seconds}s). Maksimal ${config.media.maxStickerSeconds} detik.`;
-    }
-    const buffer = await target.download();
-    const file = await conn.sendVideoAsSticker(m.chat, buffer, m, {
-      packname,
-      author: config.bot.author,
-      seconds: config.media.maxStickerSeconds,
-    });
-    if (file && fs.existsSync(file)) fs.unlinkSync(file);
-    return;
+  const seconds = Number(content.seconds) || 0;
+  if (seconds > config.media.maxStickerSeconds) {
+    throw `Video terlalu panjang (${Math.round(seconds)}s). Maksimal ${config.media.maxStickerSeconds} detik.`;
   }
 
-  throw `Tipe media *${mime}* belum didukung. Kirim gambar atau video.`;
+  const file = await conn.sendVideoAsSticker(m.chat, buffer, m, {
+    ...options,
+    seconds: config.media.maxStickerSeconds,
+  });
+  if (file && fs.existsSync(file)) fs.unlinkSync(file);
 };
 
 handler.help = ['sticker', 'stiker', 's'];

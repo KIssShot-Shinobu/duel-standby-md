@@ -18,6 +18,7 @@ Bot **WhatsApp Multi-Device** yang ditulis ulang dari nol (clean-room) dengan ar
 - [Konfigurasi .env](#-konfigurasi-env)
 - [Daftar Command](#-daftar-command)
 - [Downloader YouTube (yt-dlp)](#-downloader-youtube-yt-dlp)
+- [Troubleshooting](#-troubleshooting)
 - [Struktur Folder](#-struktur-folder)
 - [Menulis Plugin Sendiri](#-menulis-plugin-sendiri)
 - [Deployment](#-deployment)
@@ -328,6 +329,22 @@ YTDLP_ARGS=--extractor-args "youtube:player_client=android"
 - Unduhan memakai file sementara lalu dihapus otomatis (tidak menumpuk di `tmp/`).
 - Kalau ada error, bot menampilkan pesan penyebabnya (video privat, dibatasi umur, durasi terlalu panjang, masalah jaringan) — bukan crash.
 - Cek cepat di server: **`npm run check:ytdlp`** (uji metadata + unduh audio & video).
+
+---
+
+## 🩹 Troubleshooting
+
+### Stiker tidak jadi / error
+
+| Pesan / gejala | Penyebab & solusi |
+|---|---|
+| Bot bilang *"Kirim atau reply gambar/video"* padahal ada gambarnya | Sudah diperbaiki di v1.1 (dulu `m.msg` berisi kontainer pesan sehingga `m.msg.mimetype` kosong). Pastikan memakai ZIP terbaru. |
+| *"Server belum punya encoder WebP"* | ffmpeg build minimal tanpa libwebp. Jalankan `ffmpeg -encoders \| grep webp`. Kalau kosong: `apt install ffmpeg` (lengkap) atau `apt install webp` (bot otomatis pakai `cwebp` untuk gambar). |
+| Video ditolak | Batas durasi stiker video 10 detik (`MAX_STICKER_SECONDS`), dan stiker animasi wajib ffmpeg (bukan cwebp). |
+| Stiker jadi tapi tanpa nama pack | `node-webpmux` gagal menyisipkan EXIF — biasanya karena file masukan bukan WebP valid. Coba kirim ulang gambarnya. |
+| Mau cek cepat | `npm run check:sticker` (uji gambar→webp→EXIF, video→webp animasi, dan jalur plugin `.sticker`). |
+
+Kirim/reply **foto, video (≤10 detik), atau stiker** lalu ketik `.sticker` — foto yang dikirim sebagai *dokumen* juga didukung.
 
 ---
 
