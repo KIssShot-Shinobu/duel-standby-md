@@ -7,6 +7,7 @@
  *   .help sticker    -> detail sebuah command
  */
 import { KNOWN_CATEGORIES, categoryState, commandState, ensureMenuSettings, formatState } from '../lib/menu-config.js';
+import { formatLimitInfo, resolveLimit } from '../lib/limit-config.js';
 
 const handler = async (m, { conn, plugins, config, db, usedPrefix, args }) => {
   ensureMenuSettings(db);
@@ -23,7 +24,7 @@ const handler = async (m, { conn, plugins, config, db, usedPrefix, args }) => {
         `📄 File     : ${entry.name}`,
         `🏷️ Kategori : ${entry.category}`,
         `⌨️ Alias    : ${helps}`,
-        `💳 Limit    : ${entry.plugin.limit ? (entry.plugin.limit === true ? '1' : entry.plugin.limit) : 'gratis'}`,
+        `💳 Limit    : ${formatLimitInfo(resolveLimit(db, entry))}`,
         `⚙️ Status   : ${formatState({ ...commandState(db, entry.name), enabled: commandState(db, entry.name).enabled && categoryState(db, entry.category).enabled })}`,
         `🔒 Khusus   : ${[
           entry.plugin.owner && 'owner',

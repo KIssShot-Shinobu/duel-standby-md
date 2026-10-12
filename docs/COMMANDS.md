@@ -1,6 +1,6 @@
 # Daftar Command
 
-> Dibuat otomatis oleh `npm run commands -- --markdown` — 45 plugin, 89 command.
+> Dibuat otomatis oleh `npm run commands -- --markdown` — 46 plugin, 92 command.
 > Prefix default: `.` (lihat `PREFIX` di `.env`).
 
 ## ai
@@ -69,6 +69,7 @@
 | Command | Keterangan syarat | File |
 |---|---|---|
 | `.broadcast` | owner | `owner-broadcast.js` |
+| `.limitset`, `.limitcmd`, `.limitcat` | owner | `owner-limit.js` |
 | `.menuset`, `.category`, `.cmdset` | owner | `owner-menu.js` |
 | `.mode` | owner | `owner-mode.js` |
 | `.restart` | owner | `owner-restart.js` |

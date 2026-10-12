@@ -13,6 +13,7 @@ import * as Perm from './lib/permissions.js';
 import { Func, cleanJid } from './lib/functions.js';
 import { errorLog, errorText, isFriendlyError } from './lib/errors.js';
 import { isAdultCategory, pluginEnabled } from './lib/menu-config.js';
+import { resolveLimit } from './lib/limit-config.js';
 import print from './lib/print.js';
 
 /** Pisahkan prefix, nama command dan argumen dari teks pesan. */
@@ -242,7 +243,12 @@ export async function handleMessage(conn, raw, deps) {
     return { handled: false, reason: 'need-register' };
   }
 
-  const limit = Perm.consumeLimit(db, user, plugin, config);
+  // Biaya limit: pengaturan owner (command/kategori) > bawaan plugin.
+  const limitInfo = resolveLimit(db, entry);
+  ctx.limitCost = limitInfo.cost;
+  ctx.limitMode = limitInfo.mode;
+
+  const limit = Perm.consumeLimitCost(db, user, limitInfo.cost, config);
   if (!limit.ok) {
     await m.reply(config.messages.limit).catch(() => {});
     return { handled: false, reason: 'no-limit' };

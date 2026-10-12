@@ -21,6 +21,7 @@ Bot **WhatsApp Multi-Device** yang ditulis ulang dari nol (clean-room) dengan ar
 - [Yu-Gi-Oh! (YGOPRODeck API)](#-yu-gi-oh-ygoprodeck-api)
   - [Game: Tebak Kartu](#-game-tebak-kartu-yu-gi-oh)
 - [Pengaturan Menu (Owner)](#-pengaturan-menu-owner)
+- [Pengaturan Limit (Owner)](#-pengaturan-limit-owner)
 - [Troubleshooting](#-troubleshooting)
 - [Struktur Folder](#-struktur-folder)
 - [Menulis Plugin Sendiri](#-menulis-plugin-sendiri)
@@ -230,6 +231,9 @@ Prefix default: `.#!/,` (mis. `.menu`, `!ping`).
 | `.menuset` | Ringkasan & pengaturan menu (lihat bagian di bawah) |
 | `.category <kategori> show\|hide\|on\|off` | Tampilkan/sembunyikan atau aktifkan/matikan satu kategori |
 | `.cmdset <command> show\|hide\|on\|off` | Tampilkan/sembunyikan atau aktifkan/matikan satu command |
+| `.limitset` | Ringkasan pengaturan limit |
+| `.limitcmd <command> default\|gratis\|pakai\|<angka>` | Atur biaya limit satu command |
+| `.limitcat <kategori> default\|gratis\|pakai\|<angka>` | Atur biaya limit satu kategori |
 </details>
 
 <details>
@@ -474,6 +478,37 @@ Kategori `nsfw` sudah terdaftar sebagai placeholder dan muncul di `.menu` sebaga
 - **Menambah plugin NSFW nanti cukup**: buat file di `plugins/` dengan `handler.tags = ['nsfw']` — otomatis ikut aturan kategori ini (default tertutup sampai owner mengaktifkannya).
 
 ---
+
+## 💳 Pengaturan Limit (Owner)
+
+Setiap plugin punya biaya limit bawaan (`handler.limit`). Owner bisa menimpanya **tanpa mengedit kode**:
+
+| Perintah | Fungsi |
+|---|---|
+| `.limitset` | Ringkasan: berapa command berlimit, mana yang dibuat gratis / diubah biayanya |
+| `.limitcmd <command> default\|gratis\|pakai\|<angka>` | Atur biaya **satu command** |
+| `.limitcat <kategori> default\|gratis\|pakai\|<angka>` | Atur biaya **seluruh kategori** |
+
+Arti aksinya:
+
+| Aksi | Efek |
+|---|---|
+| `default` | Ikut bawaan plugin (sekaligus menghapus aturan owner) |
+| `gratis` / `free` | Tidak memotong limit sama sekali |
+| `pakai` / `on` | Wajib memakai limit (minimal 1, walau pluginnya gratis) |
+| `<angka>` | Biaya khusus, mis. `3` = memotong 3 limit |
+
+**Prioritas:** pengaturan **command** > pengaturan **kategori** > bawaan plugin.
+
+```
+.limitcmd smeme gratis        # .smeme tidak lagi memotong limit
+.limitcmd ytmp4 3             # .ytmp4 memotong 3 limit
+.limitcat game gratis         # semua command kategori game gratis
+.limitcat downloader pakai    # semua command downloader wajib pakai limit
+.limitcmd smeme default       # kembalikan ke bawaan plugin
+```
+
+Pengaturan disimpan di `settings.limit` pada database (bertahan setelah restart), dan `.help <command>` menampilkan biaya efektifnya.
 
 ## 🩹 Troubleshooting
 
