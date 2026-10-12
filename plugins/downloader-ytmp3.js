@@ -51,14 +51,15 @@ export async function resolveVideo(input, config) {
   return { url: video.url, title: video.title, duration: video.seconds };
 }
 
-const handler = async (m, { conn, text, config, usedPrefix }) => {
+const handler = async (m, { conn, text, config, usedPrefix, wait }) => {
   if (!text) return m.reply(`Contoh: ${usedPrefix}ytmp3 https://youtu.be/xxxx`);
 
   if (!hasYtDlp(config.ytdlp.path)) {
     return m.reply(ytDlpInstallHint(config));
   }
 
-  const done = await m.reply(config.messages.wait);
+  // wait() mengirim pesan tunggu dan mengembalikan fungsi untuk mengeditnya.
+  const update = await wait();
   const video = await resolveVideo(text, config);
 
   const raw = await ytDlpDownload(video.url, {
@@ -100,7 +101,7 @@ const handler = async (m, { conn, text, config, usedPrefix }) => {
     .filter(Boolean)
     .join('\n');
 
-  if (done) await done(summary);
+  if (typeof update === 'function') await update(summary);
   else await m.reply(summary);
   return buffer.length;
 };

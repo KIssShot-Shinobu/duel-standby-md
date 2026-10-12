@@ -10,14 +10,15 @@ import { hasFfmpeg, hasYtDlp, ytDlpDownload, ytDlpInstallHint } from '../lib/med
 import { formatBytes, shortClock } from '../lib/functions.js';
 import { resolveVideo } from './downloader-ytmp3.js';
 
-const handler = async (m, { conn, text, config, usedPrefix }) => {
+const handler = async (m, { conn, text, config, usedPrefix, wait }) => {
   if (!text) return m.reply(`Contoh: ${usedPrefix}ytmp4 https://youtu.be/xxxx`);
 
   if (!hasYtDlp(config.ytdlp.path)) {
     return m.reply(ytDlpInstallHint(config));
   }
 
-  const done = await m.reply(config.messages.wait);
+  // wait() mengirim pesan tunggu dan mengembalikan fungsi untuk mengeditnya.
+  const update = await wait();
   const video = await resolveVideo(text, config);
 
   let buffer;
@@ -58,7 +59,7 @@ const handler = async (m, { conn, text, config, usedPrefix }) => {
     m,
   );
 
-  if (done) await done('✅ Video terkirim.');
+  if (typeof update === 'function') await update('✅ Video terkirim.');
   return buffer.length;
 };
 

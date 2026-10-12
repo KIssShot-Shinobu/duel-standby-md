@@ -156,6 +156,60 @@ test('pesan tanpa konten nyata (protocolMessage) diabaikan', async () => {
   db.close();
 });
 
+test('ctx.wait() mengirim pesan tunggu lalu bisa mengeditnya', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rtxzy-wait-plugins-'));
+  fs.writeFileSync(
+    path.join(dir, 'x-wait.js'),
+    `const handler = async (m, { wait }) => {
+  const update = await wait();
+  if (typeof update !== 'function') throw 'wait() tidak mengembalikan fungsi';
+  await update('selesai diproses');
+};
+handler.help = ['w'];
+handler.tags = ['test'];
+handler.command = /^(w)$/i;
+export default handler;`,
+  );
+
+  const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rtxzy-wait-db-'));
+  const db = new Database(path.join(dbDir, 'db.json'), { saveInterval: 5000, logger: quiet });
+  db.load();
+  const plugins = new PluginManager(dir, { logger: quiet });
+  await plugins.loadAll();
+
+  const sent = [];
+  const conn = {
+    user: { id: '628999@s.whatsapp.net' },
+    sendMessage: async (chat, content) => {
+      sent.push({ chat, content });
+      return { key: { id: `M${sent.length}`, remoteJid: chat } };
+    },
+    readMessages: async () => [],
+    groupMetadata: async () => ({ participants: [] }),
+  };
+
+  const result = await handleMessage(
+    conn,
+    {
+      key: { remoteJid: '628111@s.whatsapp.net', fromMe: false, id: 'W1' },
+      message: { conversation: '.w' },
+      messageTimestamp: Math.floor(Date.now() / 1000),
+      pushName: 'Tester',
+    },
+    { plugins, db, config, logger: quiet },
+  );
+
+  assert.equal(result.handled, true);
+  assert.ok(
+    sent.some((item) => item.content.text === config.messages.wait),
+    'pesan tunggu tidak terkirim',
+  );
+  const edited = sent.find((item) => item.content.text === 'selesai diproses');
+  assert.ok(edited, 'pesan tunggu tidak diedit');
+  assert.ok(edited.content.edit, 'edit() harus memakai key pesan tunggu');
+  db.close();
+});
+
 test('pesan dari chat yang di-mute diabaikan', async () => {
   const { db, plugins, conn } = await setup();
   db.chat('123@g.us').mute = true;

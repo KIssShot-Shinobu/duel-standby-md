@@ -27,7 +27,7 @@ const premiums = toNumbers(envList('PREMIUM_NUMBER', []));
 export const config = {
   root: ROOT,
   /** Metadata proses */
-  version: '1.1.2',
+  version: '1.1.4',
   startedAt: Date.now(),
 
   bot: {
@@ -104,7 +104,7 @@ export const config = {
     model: env('AI_MODEL', 'gpt-4o-mini'),
   },
 
-  /** Yu-Gi-Oh! API (YGOPRODeck) — gratis, tanpa API key */
+  /** Yu-Gi-Oh! API (YGOPRODeck) â€” gratis, tanpa API key */
   ygoprodeck: {
     base: env('YGO_BASE', 'https://db.ygoprodeck.com/api/v7'),
     timeout: envNumber('YGO_TIMEOUT', 30000),
@@ -155,7 +155,7 @@ export const config = {
   messages: {
     wait: env('MSG_WAIT', '_*Tunggu sedang di proses...*_'),
     error: env('MSG_ERROR', '_*Terjadi kesalahan pada server*_'),
-    stickerWait: env('MSG_STICKER_WAIT', '*⫹⫺ Stiker sedang dibuat...*'),
+    stickerWait: env('MSG_STICKER_WAIT', '*â«¹â«º Stiker sedang dibuat...*'),
     banned: env('MSG_BANNED', '_*Kamu diblokir dari bot ini*_'),
     limit: env('MSG_LIMIT', '_*Limit kamu habis, tunggu besok atau upgrade ke premium*_'),
     premium: env('MSG_PREMIUM', '_*Fitur ini khusus pengguna premium*_'),
