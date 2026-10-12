@@ -1,0 +1,9 @@
+# Normalisasi akhir baris agar konsisten lintas OS (Windows/Linux)
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.png binary
+*.webp binary
+*.jpg binary
+*.ttf binary
+*.otf binary

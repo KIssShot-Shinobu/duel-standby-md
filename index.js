@@ -69,6 +69,12 @@ function startBot() {
     const wasRunning = Boolean(child);
     child = null;
     if (shuttingDown || !wasRunning) return;
+    if (config.flags.test) {
+      // Mode pengujian: jangan restart, cukup keluar mengikuti kode anak.
+      print.info(`Mode --test: bot keluar dengan kode ${code ?? 0}, supervisor tidak restart.`);
+      shutdown('test-mode').catch(() => process.exit(code ?? 0));
+      return;
+    }
     restarts += 1;
     const wait = Math.min(15000, 1000 * restarts);
     print.warn(`Bot berhenti (kode=${code ?? 'null'} signal=${signal ?? 'null'}). Restart dalam ${wait} ms...`);
