@@ -1,0 +1,13 @@
+services:
+  bot:
+    build: .
+    container_name: rtxzy-md-clean
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    volumes:
+      - ./sessions:/app/sessions
+      - ./database:/app/database
+      - ./tmp:/app/tmp

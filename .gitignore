@@ -1,0 +1,10 @@
+node_modules/
+sessions/
+database/
+tmp/
+logs/
+.env
+*.log
+.eslintcache
+.DS_Store
+Thumbs.db
