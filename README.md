@@ -428,6 +428,20 @@ Cek cepat tanpa WhatsApp: **`npm run check:quiz`** (ambil kartu asli, tampilkan 
 | Stiker jadi tapi tanpa nama pack | `node-webpmux` gagal menyisipkan EXIF — biasanya karena file masukan bukan WebP valid. Coba kirim ulang gambarnya. |
 | Mau cek cepat | `npm run check:sticker` (uji gambar→webp→EXIF, video→webp animasi, dan jalur plugin `.sticker`). |
 
+### Koneksi: pairing code muncul padahal sudah login / tiba-tiba logout
+
+| Gejala | Penyebab & solusi |
+|---|---|
+| Restart bot lalu muncul **pairing code** lagi, tak lama koneksi ditutup `503` dan `401 (sesi logout)` | Bug yang sudah diperbaiki: Baileys 6.7 hanya menandai `creds.registered = true` untuk login **pairing code**, tidak untuk **QR** — jadi bot mengira belum login dan meminta pairing code, yang membuat WhatsApp mematikan perangkat. Sekarang bot memeriksa `sessions/creds.json` (termasuk `me.id`) dan **tidak akan** minta pairing code kalau sesi sudah ada. |
+| Sudah kena `401` | Sesi lama otomatis dipindahkan ke `sessions.logged-out-<waktu>` dan bot dijalankan ulang — pairing code/QR baru akan muncul. Kalau mau bersih total: hapus folder `sessions*` lalu `npm start`. |
+| Ingin ganti nomor / login ulang | Hapus folder `sessions/` lalu jalankan `node index.js --pair 628xxx` (atau `--qr`). Pairing code hanya diminta kalau folder sesi **kosong**. |
+
+### Koneksi & sesi
+
+- Sesi disimpan di `sessions/`. **Jangan commit** folder ini.
+- Kalau `sessions/` sudah berisi creds, `--pair`/`PAIRING_NUMBER` diabaikan (supaya sesi tidak dimatikan).
+- Saat logout terdeteksi, folder sesi dipindahkan otomatis ke `sessions.logged-out-<waktu>` (tidak dihapus, jadi masih bisa diperiksa).
+
 Kirim/reply **foto, video (≤10 detik), atau stiker** lalu ketik `.sticker` — foto yang dikirim sebagai *dokumen* juga didukung.
 
 ---

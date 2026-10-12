@@ -15,6 +15,7 @@ import { createApi } from './lib/api.js';
 import { createConnection } from './lib/connection.js';
 import { startHealthServer, writeStatus } from './lib/health.js';
 import { hasFfmpeg, hasYtDlp } from './lib/media.js';
+import { backupSessionDir } from './lib/session.js';
 import { dispatchCall, dispatchGroupParticipants, dispatchGroupsUpdate, handleMessage } from './handler.js';
 
 const nodeMajor = Number(process.versions.node.split('.')[0]);
@@ -189,7 +190,20 @@ if (config.flags.noConnect) {
         void raw;
       },
       onLoggedOut: () => {
-        publishStatus({ event: 'logged-out' });
+        // Sesi mati (perangkat dihapus / logout): pindahkan folder sesi supaya
+        // bot bisa pairing ulang tanpa menimpa berkas lama.
+        const backup = backupSessionDir(config.session.dir);
+        runtime.connected = false;
+        runtime.botNumber = null;
+        print.error(`Sesi WhatsApp logout.${backup ? ` Sesi lama dipindahkan ke ${path.basename(backup)}.` : ''}`);
+        publishStatus({ event: 'logged-out', backup: backup ? path.basename(backup) : null });
+
+        if (process.send) {
+          print.info('Supervisor akan menjalankan ulang bot — pairing/QR baru akan muncul.');
+          setTimeout(() => process.exit(0), 1500);
+        } else {
+          print.warn('Jalankan ulang bot (npm start) untuk pairing/QR baru.');
+        }
       },
       onMessage: (conn, raw, type) => {
         runtime.lastMessageAt = Date.now();
