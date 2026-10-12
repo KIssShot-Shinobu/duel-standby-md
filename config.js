@@ -110,6 +110,9 @@ export const config = {
     timeout: envNumber('YGO_TIMEOUT', 30000),
     cacheFile: env('YGO_CACHE_FILE', path.join('database', 'ygoprodeck-cache.json')),
     cacheMax: envNumber('YGO_CACHE_MAX', 400),
+    /** Cache gambar kartu (API meminta gambar disimpan sendiri, bukan di-hotlink) */
+    imageCacheDir: env('YGO_IMAGE_CACHE', path.join('database', 'cache', 'cards')),
+    imageCacheMax: envNumber('YGO_IMAGE_CACHE_MAX', 300),
   },
 
   /** Game tebak kartu Yu-Gi-Oh! */

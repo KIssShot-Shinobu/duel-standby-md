@@ -276,6 +276,7 @@ Prefix default: `.#!/,` (mis. `.menu`, `!ping`).
 | Command | Fungsi |
 |---|---|
 | `.ygo <nama\|passcode>` | Info kartu + foto + efek lengkap |
+| `.card <nama\|passcode>` | **Hanya gambarnya** — tanpa caption, tanpa teks, tanpa quote |
 | `.ygorandom` | Kartu acak |
 | `.ygosearch <filter>` | Pencarian lanjutan (`atk>2500 type=xyz level<=4`) |
 | `.archetype <nama>` / `.archetypes` | Kartu dalam archetype / daftar archetype |
@@ -355,6 +356,8 @@ Fitur kartu Yu-Gi-Oh! memakai **[YGOPRODeck API v7](https://ygoprodeck.com/api-g
 | Command | Contoh | Fungsi |
 |---|---|---|
 | `.ygo` | `.ygo Dark Magician` | Nama persis; kalau tidak ketemu otomatis fuzzy search (menampilkan pilihan) |
+| `.card` | `.card Dark Magician` | **Kirim gambar kartunya saja** — tanpa caption/teks/quote |
+| `.card` | `.card dark magician 2` | Artwork alternatif ke-2 (kalau kartu punya banyak art) |
 | `.ygo <passcode>` | `.ygo 46986414` | Cari lewat passcode 8 digit |
 | `.ygorandom` | | Kartu acak |
 | `.ygosearch` | `.ygosearch atk>2500 level<=4 attribute=dark sort=atk` | Pencarian lanjutan |
@@ -369,6 +372,7 @@ Fitur kartu Yu-Gi-Oh! memakai **[YGOPRODeck API v7](https://ygoprodeck.com/api-g
 
 **Detail teknis:**
 - Output `.ygo`: **foto kartu** + caption statistik (tipe, atribut, level/link, ATK/DEF, archetype, banlist, harga TCGplayer/Cardmarket) lalu **teks efek lengkap**.
+- Output `.card`: **hanya gambar** (tanpa caption, tanpa pesan tambahan, tidak di-quote). Kalau nama yang diketik ambigu, bot membalas daftar nama polos supaya bisa dipersempit. Gambar disimpan di `database/cache/cards/` (maks `YGO_IMAGE_CACHE_MAX` berkas) sehingga pemanggilan berikutnya instan — sesuai permintaan YGOPRODeck agar gambar tidak di-hotlink terus-menerus.
 - Rate limit API **20 request/detik**; bot memakai cache 2 hari di memori + berkas `database/ygoprodeck-cache.json` (API juga meminta data disimpan lokal). Hapus berkas itu kalau mau data segar.
 - Gambar diunduh lalu dikirim sebagai lampiran WhatsApp (tidak hotlink ke server mereka).
 - Filter `.ygosearch` yang didukung: `name`, `fname`, `id`, `type`, `atk`, `def`, `level`, `race`, `attribute`, `link`, `linkmarker`, `scale`, `cardset`, `archetype`, `banlist`, `sort`, `format`, `staple`, `misc`, `has_effect`, `startdate`, `enddate`, `num`, `offset`. Operator `>` `>=` `<` `<=` hanya untuk `atk`/`def`/`level`. Nilai berisi spasi pakai tanda kutip: `type="xyz monster"`.
