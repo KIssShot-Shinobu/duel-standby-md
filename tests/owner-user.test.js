@@ -138,6 +138,30 @@ test('.premium del mencabut premium dan mengembalikan kuota free', async () => {
   db.close();
 });
 
+test('.premium list menampilkan daftar user premium', async () => {
+  const { db } = makeDb();
+  // Tambah beberapa user premium
+  await run(db, { command: 'premium', args: ['add', TARGET, '30'] });
+  await run(db, { command: 'premium', args: ['add', '628987654321', '7'] });
+
+  const reply = await run(db, { command: 'premium', args: ['list'] });
+  
+  assert.match(reply, /Daftar Premium \(2\)/, 'harus ada 2 user premium');
+  assert.match(reply, /628123456789/, 'target harus muncul');
+  assert.match(reply, /628987654321/, 'target kedua harus muncul');
+  assert.match(reply, /\d{2}\/\d{2}\/\d{4}/, 'masa premium harus muncul sebagai tanggal');
+  assert.match(reply, /limit: /, 'limit user harus muncul');
+  db.close();
+});
+
+test('.premium list kosong jika tidak ada premium', async () => {
+  const { db } = makeDb();
+  const reply = await run(db, { command: 'premium', args: ['list'] });
+  
+  assert.match(reply, /Belum ada user premium/);
+  db.close();
+});
+
 // ── Limit ──────────────────────────────────────────────────────────────────
 
 test('.limit add menambah limit user baru dan bertahan setelah reset harian', async () => {

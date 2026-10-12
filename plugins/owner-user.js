@@ -23,7 +23,7 @@ const HELP = (config) => {
   const p = config.bot.prefix[0];
   return [
     '*Manajemen user*',
-    `${p}premium add|del <nomor> [hari]`,
+    `${p}premium add|del|list <nomor> [hari]`,
     `${p}ban <nomor> [alasan]`,
     `${p}unban <nomor>`,
     `${p}limit add|del <nomor> <jumlah>`,
@@ -32,6 +32,7 @@ const HELP = (config) => {
     'Nomor bisa format 628xx, 08xx, atau mention @628xx.',
     'Bisa juga reply pesan user lalu:',
     `• ${p}premium add 30   (30 hari)`,
+    `• ${p}premium list     (daftar premium)`,
     `• ${p}limit add 10     (+10 limit)`,
   ].join('\n');
 };
@@ -43,6 +44,27 @@ const HELP = (config) => {
 
 const handler = async (m, { args, command, config, db }) => {
   const action = String(args[0] || '').toLowerCase();
+
+  // ── .premium list ──────────────────────────────────────────────────────────
+  if (/^premium$/i.test(command) && action === 'list') {
+    const now = Date.now();
+    const premiumUsers = Object.entries(db.data.users)
+      .filter(([, user]) => user.premium && (!user.premiumUntil || user.premiumUntil > Date.now()))
+      .map(([jid, user]) => ({
+        jid,
+        name: user.name || bareNumber(jid),
+        until: user.premiumUntil ? new Date(user.premiumUntil).toLocaleString('id-ID', { timeZone: config.bot.timezone }) : 'selamanya',
+        limit: user.limit || 0,
+      }));
+
+    if (!premiumUsers.length) {
+      return m.reply('Belum ada user premium.');
+    }
+
+    const lines = premiumUsers.map((u, i) => `${i + 1}. ${u.name} (${bareNumber(u.jid)}) — sampai ${u.until} | limit: ${u.limit}`).join('\n');
+    return m.reply(`*Daftar Premium (${premiumUsers.length})*\n\n${lines}`);
+  }
+
   // `.premium add <target> ...` / `.limit add <target> ...` punya kata kunci aksi dulu,
   // sedangkan `.ban <target>`, `.unban <target>`, `.resetlimit <target>` tidak.
   const withAction = /^(premium|limit)$/i.test(command);
@@ -55,16 +77,17 @@ const handler = async (m, { args, command, config, db }) => {
     return m.reply(HELP(config));
   }
 
+  const action2 = String(args[0] || '').toLowerCase();
   const user = db.user(target);
   const bonus = () => Math.max(0, Number(user.limitBonus) || 0);
 
   // ── .limit add|del ───────────────────────────────────────────────────────
   if (/^limit$/i.test(command)) {
     const amount = Math.abs(Number(rest[0]) || 0);
-    if (!['add', 'del'].includes(action) || !amount) {
+    if (!['add', 'del'].includes(action2) || !amount) {
       return m.reply(`Format: ${config.bot.prefix[0]}limit add|del ${bareNumber(target)} 10`);
     }
-    const delta = action === 'add' ? amount : -amount;
+    const delta = action2 === 'add' ? amount : -amount;
     const result = adjustLimit(db, user, delta, config);
     await db.save?.(true);
     return m.reply(
@@ -82,11 +105,11 @@ const handler = async (m, { args, command, config, db }) => {
 
   // ── .premium add|del ─────────────────────────────────────────────────────
   if (/^premium$/i.test(command)) {
-    if (!['add', 'del'].includes(action)) {
+    if (!['add', 'del'].includes(action2)) {
       return m.reply(`Format: ${config.bot.prefix[0]}premium add|del ${bareNumber(target)} [hari]`);
     }
 
-    if (action === 'add') {
+    if (action2 === 'add') {
       const days = Number(rest[0]) > 0 ? Number(rest[0]) : config.limits.premiumDays;
       // Kalau premium masih aktif, tambahkan harinya dari sisa masa aktif —
       // bukan menimpanya (dulu `.premium add 30` memotong sisa hari yang ada).
