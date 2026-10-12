@@ -13,6 +13,8 @@
     "dev": "node --watch main.js",
     "smoke": "node main.js --no-connect --health --test",
     "check": "node scripts/check-syntax.js",
+    "commands": "node scripts/list-commands.mjs",
+    "commands:md": "node scripts/list-commands.mjs --markdown",
     "check:ytdlp": "node scripts/ytdlp-check.mjs",
     "check:sticker": "node scripts/sticker-check.mjs",
     "check:ygo": "node scripts/ygoprodeck-check.mjs",
