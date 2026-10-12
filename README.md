@@ -18,6 +18,7 @@ Bot **WhatsApp Multi-Device** yang ditulis ulang dari nol (clean-room) dengan ar
 - [Konfigurasi .env](#-konfigurasi-env)
 - [Daftar Command](#-daftar-command)
 - [Downloader YouTube (yt-dlp)](#-downloader-youtube-yt-dlp)
+- [Yu-Gi-Oh! (YGOPRODeck API)](#-yu-gi-oh-ygoprodeck-api)
 - [Troubleshooting](#-troubleshooting)
 - [Struktur Folder](#-struktur-folder)
 - [Menulis Plugin Sendiri](#-menulis-plugin-sendiri)
@@ -269,6 +270,19 @@ Prefix default: `.#!/,` (mis. `.menu`, `!ping`).
 </details>
 
 <details>
+<summary><b>game</b> — Yu-Gi-Oh! (data YGOPRODeck)</summary>
+
+| Command | Fungsi |
+|---|---|
+| `.ygo <nama\|passcode>` | Info kartu + foto + efek lengkap |
+| `.ygorandom` | Kartu acak |
+| `.ygosearch <filter>` | Pencarian lanjutan (`atk>2500 type=xyz level<=4`) |
+| `.archetype <nama>` / `.archetypes` | Kartu dalam archetype / daftar archetype |
+| `.cardset <nama>` / `.setcode <kode>` / `.cardsets` | Info booster pack & kartu di dalamnya |
+| `.banlist [tcg\|ocg\|goat]` | Daftar kartu Forbidden/Limited |
+</details>
+
+<details>
 <summary><b>fun / ai / rpg / info</b></summary>
 
 | Command | Fungsi |
@@ -329,6 +343,36 @@ YTDLP_ARGS=--extractor-args "youtube:player_client=android"
 - Unduhan memakai file sementara lalu dihapus otomatis (tidak menumpuk di `tmp/`).
 - Kalau ada error, bot menampilkan pesan penyebabnya (video privat, dibatasi umur, durasi terlalu panjang, masalah jaringan) — bukan crash.
 - Cek cepat di server: **`npm run check:ytdlp`** (uji metadata + unduh audio & video).
+
+---
+
+## 🎴 Yu-Gi-Oh! (YGOPRODeck API)
+
+Fitur kartu Yu-Gi-Oh! memakai **[YGOPRODeck API v7](https://ygoprodeck.com/api-guide/)** — **gratis, tanpa API key**, jadi langsung bisa dipakai setelah `npm install`.
+
+| Command | Contoh | Fungsi |
+|---|---|---|
+| `.ygo` | `.ygo Dark Magician` | Nama persis; kalau tidak ketemu otomatis fuzzy search (menampilkan pilihan) |
+| `.ygo <passcode>` | `.ygo 46986414` | Cari lewat passcode 8 digit |
+| `.ygorandom` | | Kartu acak |
+| `.ygosearch` | `.ygosearch atk>2500 level<=4 attribute=dark sort=atk` | Pencarian lanjutan |
+| `.ygosearch` | `.ygosearch type=xyz race=dragon num=5` | Filter tipe/race |
+| `.ygosearch` | `.ygosearch archetype="blue-eyes" banlist=tcg` | Filter archetype/banlist |
+| `.archetype` | `.archetype Blue-Eyes` | Kartu dalam archetype + ringkasan tipe |
+| `.archetypes` | | Daftar semua archetype (662+) |
+| `.cardset` | `.cardset Metal Raiders` | Kartu dalam sebuah booster pack |
+| `.setcode` | `.setcode SDY-046` | Info 1 kartu dari kode set |
+| `.cardsets` | | Jumlah set + 10 rilis terbaru |
+| `.banlist` | `.banlist tcg` / `ocg` / `goat` | Kartu Forbidden / Limited / Semi-Limited |
+
+**Detail teknis:**
+- Output `.ygo`: **foto kartu** + caption statistik (tipe, atribut, level/link, ATK/DEF, archetype, banlist, harga TCGplayer/Cardmarket) lalu **teks efek lengkap**.
+- Rate limit API **20 request/detik**; bot memakai cache 2 hari di memori + berkas `database/ygoprodeck-cache.json` (API juga meminta data disimpan lokal). Hapus berkas itu kalau mau data segar.
+- Gambar diunduh lalu dikirim sebagai lampiran WhatsApp (tidak hotlink ke server mereka).
+- Filter `.ygosearch` yang didukung: `name`, `fname`, `id`, `type`, `atk`, `def`, `level`, `race`, `attribute`, `link`, `linkmarker`, `scale`, `cardset`, `archetype`, `banlist`, `sort`, `format`, `staple`, `misc`, `has_effect`, `startdate`, `enddate`, `num`, `offset`. Operator `>` `>=` `<` `<=` hanya untuk `atk`/`def`/`level`. Nilai berisi spasi pakai tanda kutip: `type="xyz monster"`.
+- Alias tipe: `normal`, `effect`, `ritual`, `fusion`, `synchro`, `xyz`, `link`, `pendulum`, `spell`, `trap`.
+- Env opsional: `YGO_BASE`, `YGO_TIMEOUT`, `YGO_CACHE_FILE`, `YGO_CACHE_MAX`.
+- Cek cepat di server: **`npm run check:ygo`** (versi database, lookup, fuzzy, filter, random, archetype, set, banlist, unduh gambar).
 
 ---
 

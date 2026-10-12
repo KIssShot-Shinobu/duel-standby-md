@@ -104,6 +104,14 @@ export const config = {
     model: env('AI_MODEL', 'gpt-4o-mini'),
   },
 
+  /** Yu-Gi-Oh! API (YGOPRODeck) — gratis, tanpa API key */
+  ygoprodeck: {
+    base: env('YGO_BASE', 'https://db.ygoprodeck.com/api/v7'),
+    timeout: envNumber('YGO_TIMEOUT', 30000),
+    cacheFile: env('YGO_CACHE_FILE', path.join('database', 'ygoprodeck-cache.json')),
+    cacheMax: envNumber('YGO_CACHE_MAX', 400),
+  },
+
   ytdlp: {
     path: env('YTDLP_PATH', ''),
     maxDurationSeconds: envNumber('YTDLP_MAX_DURATION', 900),

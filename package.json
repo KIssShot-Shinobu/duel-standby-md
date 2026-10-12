@@ -15,6 +15,7 @@
     "check": "node scripts/check-syntax.js",
     "check:ytdlp": "node scripts/ytdlp-check.mjs",
     "check:sticker": "node scripts/sticker-check.mjs",
+    "check:ygo": "node scripts/ygoprodeck-check.mjs",
     "test": "node --test"
   },
   "keywords": [
