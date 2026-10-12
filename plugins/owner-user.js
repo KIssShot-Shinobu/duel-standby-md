@@ -1,66 +1,132 @@
 /**
  * Manajemen user oleh owner.
- *   .premium add|del 628xx [hari]
- *   .ban 628xx [alasan]
- *   .unban 628xx
- *   .limit add|del 628xx 10
- *   .resetlimit 628xx
+ *
+ *   .premium add 628xx [hari]      .premium del 628xx
+ *   .premium add 30                (sambil reply pesan user -> 30 hari)
+ *   .limit add 628xx 10            .limit del 628xx 5
+ *   .limit add 10                  (sambil reply -> +10)
+ *   .resetlimit 628xx              .ban 628xx [alasan]     .unban 628xx
+ *
+ * Target boleh: nomor (628xx / 08xx), mention (@628xx), atau cukup reply pesan user.
+ * Tambahan limit dari owner disimpan sebagai "bonus" sehingga tidak hilang
+ * saat reset limit harian (lihat lib/permissions.js -> adjustLimit).
  */
-import { toJid, bareNumber } from '../lib/functions.js';
-import { refreshLimit } from '../lib/permissions.js';
+import { toJid, bareNumber, cleanJid, isJidUser } from '../lib/functions.js';
+import { adjustLimit, limitBase, refreshLimit } from '../lib/permissions.js';
 
-const handler = async (m, { conn, args, command, config, db }) => {
-  const action = (args[0] || '').toLowerCase();
-  const rawTarget = args[1];
-  if (!rawTarget) {
-    return m.reply(
-      [
-        '*Manajemen user*',
-        `${config.bot.prefix[0]}premium add|del <nomor> [hari]`,
-        `${config.bot.prefix[0]}ban <nomor> [alasan]`,
-        `${config.bot.prefix[0]}unban <nomor>`,
-        `${config.bot.prefix[0]}limit add|del <nomor> <jumlah>`,
-        `${config.bot.prefix[0]}resetlimit <nomor>`,
-        '',
-        'Nomor bisa format 628xx atau 08xx.',
-      ].join('\n'),
-    );
+const NUMBER_ARG = /^@?\+?\d{7,20}$/;
+
+const HELP = (config) => {
+  const p = config.bot.prefix[0];
+  return [
+    '*Manajemen user*',
+    `${p}premium add|del <nomor> [hari]`,
+    `${p}ban <nomor> [alasan]`,
+    `${p}unban <nomor>`,
+    `${p}limit add|del <nomor> <jumlah>`,
+    `${p}resetlimit <nomor>`,
+    '',
+    'Nomor bisa format 628xx, 08xx, atau mention @628xx.',
+    'Bisa juga reply pesan user lalu:',
+    `• ${p}premium add 30   (30 hari)`,
+    `• ${p}limit add 10     (+10 limit)`,
+  ].join('\n');
+};
+
+/**
+ * Tentukan target dari argumen, mention, atau pesan yang di-reply.
+ * `args` harus SUDAH tanpa kata kunci aksi (add/del) bila ada.
+ * @returns {{jid: string, rest: string[]}} `rest` = argumen setelah target
+ */
+export function resolveTarget(m, args = [], { shorthand = true } = {}) {
+  const raw = String(args[0] ?? '').trim();
+
+  // nomor polos / mention / jid lengkap
+  if (raw && NUMBER_ARG.test(raw)) return { jid: toJid(raw), rest: args.slice(1) };
+  if (raw && raw.includes('@') && isJidUser(cleanJid(raw))) return { jid: cleanJid(raw), rest: args.slice(1) };
+
+  // tanpa nomor: pakai mention atau pengirim pesan yang di-reply
+  const source = (m?.mentionedJid || [])[0] || m?.quoted?.sender || '';
+  if (source) {
+    // ".premium add 30" / ".limit add 10" saat reply -> angka itu jadi parameter
+    const rest = shorthand && /^\d{1,4}$/.test(raw) ? [raw, ...args.slice(1)] : args.slice(1);
+    return { jid: cleanJid(source), rest };
+  }
+  return { jid: '', rest: [] };
+}
+
+const handler = async (m, { args, command, config, db }) => {
+  const action = String(args[0] || '').toLowerCase();
+  // `.premium add <target> ...` / `.limit add <target> ...` punya kata kunci aksi dulu,
+  // sedangkan `.ban <target>`, `.unban <target>`, `.resetlimit <target>` tidak.
+  const withAction = /^(premium|limit)$/i.test(command);
+  const { jid: target, rest } = resolveTarget(m, withAction ? args.slice(1) : args, { shorthand: withAction });
+
+  if (!target || !isJidUser(target)) {
+    return m.reply(HELP(config));
   }
 
-  const target = toJid(rawTarget);
   const user = db.user(target);
+  const bonus = () => Math.max(0, Number(user.limitBonus) || 0);
 
+  // ── .limit add|del ───────────────────────────────────────────────────────
   if (/^limit$/i.test(command)) {
-    const amount = Math.abs(Number(args[2]) || 0);
+    const amount = Math.abs(Number(rest[0]) || 0);
     if (!['add', 'del'].includes(action) || !amount) {
       return m.reply(`Format: ${config.bot.prefix[0]}limit add|del ${bareNumber(target)} 10`);
     }
-    user.limit = Math.max(0, (user.limit || 0) + (action === 'add' ? amount : -amount));
-    db.touch();
-    return m.reply(`✅ Limit ${bareNumber(target)} sekarang *${user.limit}*`);
+    const delta = action === 'add' ? amount : -amount;
+    const result = adjustLimit(db, user, delta, config);
+    await db.save?.(true);
+    return m.reply(
+      [
+        `✅ Limit ${bareNumber(target)} sekarang *${result.limit}*`,
+        result.bonus ? `➕ bonus owner: *+${result.bonus}* (tidak hilang saat reset harian)` : '',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    );
   }
 
-  if (/^(premium)$/i.test(command)) {
+  // ── .premium add|del ─────────────────────────────────────────────────────
+  if (/^premium$/i.test(command)) {
     if (!['add', 'del'].includes(action)) {
       return m.reply(`Format: ${config.bot.prefix[0]}premium add|del ${bareNumber(target)} [hari]`);
     }
+
     if (action === 'add') {
-      const days = Number(args[2]) || config.limits.premiumDays;
+      const days = Number(rest[0]) > 0 ? Number(rest[0]) : config.limits.premiumDays;
       user.premium = true;
       user.premiumUntil = Date.now() + days * 86400000;
+      // kuota limit langsung menyesuaikan status premium
+      if (!user.lastLimitReset) user.lastLimitReset = Date.now();
+      user.limit = limitBase(user, config) + bonus();
       db.touch();
-      return m.reply(`✅ ${bareNumber(target)} sekarang *premium* selama ${days} hari.`);
+      await db.save?.(true);
+      return m.reply(
+        [
+          `✅ ${bareNumber(target)} sekarang *premium* selama ${days} hari.`,
+          `📅 berakhir: ${new Date(user.premiumUntil).toLocaleString('id-ID', { timeZone: config.bot.timezone })}`,
+          `💳 kuota limit: *${user.limit}*`,
+        ].join('\n'),
+      );
     }
+
     user.premium = false;
     user.premiumUntil = 0;
+    if (!user.lastLimitReset) user.lastLimitReset = Date.now();
+    user.limit = Math.min(Number(user.limit) || 0, limitBase(user, config) + bonus());
     db.touch();
-    return m.reply(`✅ Premium ${bareNumber(target)} dicabut.`);
+    await db.save?.(true);
+    return m.reply(`✅ Premium ${bareNumber(target)} dicabut. Kuota limit: *${user.limit}*`);
   }
 
+  // ── .ban / .unban ────────────────────────────────────────────────────────
   if (/^(ban)$/i.test(command)) {
     user.banned = true;
-    user.bannedReason = args.slice(2).join(' ') || 'tanpa alasan';
+    user.bannedReason = rest.join(' ') || 'tanpa alasan';
     db.touch();
+    await db.save?.(true);
     return m.reply(`🚫 ${bareNumber(target)} diblokir. Alasan: ${user.bannedReason}`);
   }
 
@@ -68,17 +134,22 @@ const handler = async (m, { conn, args, command, config, db }) => {
     user.banned = false;
     user.bannedReason = '';
     db.touch();
+    await db.save?.(true);
     return m.reply(`✅ Blokir ${bareNumber(target)} dibuka.`);
   }
 
+  // ── .resetlimit ──────────────────────────────────────────────────────────
   if (/^(resetlimit)$/i.test(command)) {
     user.lastLimitReset = 0;
     const limit = refreshLimit(db, user, config);
     db.touch();
-    return m.reply(`✅ Limit ${bareNumber(target)} direset menjadi *${limit}*`);
+    await db.save?.(true);
+    return m.reply(
+      `✅ Limit ${bareNumber(target)} direset menjadi *${limit}*${bonus() ? ` (termasuk bonus owner +${bonus()})` : ''}`,
+    );
   }
 
-  return m.reply('Command tidak dikenali.');
+  return m.reply(HELP(config));
 };
 
 handler.help = ['premium', 'ban', 'unban', 'limit', 'resetlimit'];

@@ -227,8 +227,8 @@ Prefix default: `.#!/,` (mis. `.menu`, `!ping`).
 | `.restart` | Restart bot |
 | `.premium add\|del <nomor> [hari]` | Kelola premium |
 | `.ban <nomor> [alasan]` / `.unban <nomor>` | Blokir user |
-| `.limit add\|del <nomor> <jumlah>` | Tambah/kurangi limit |
-| `.resetlimit <nomor>` | Reset limit harian |
+| `.limit add\|del <nomor> <jumlah>` | Tambah/kurangi limit (tersimpan sebagai bonus owner) |
+| `.resetlimit <nomor>` | Reset limit harian user (bonus owner tetap) |
 | `.menuset` | Ringkasan & pengaturan menu (lihat bagian di bawah) |
 | `.category <kategori> show\|hide\|on\|off` | Tampilkan/sembunyikan atau aktifkan/matikan satu kategori |
 | `.cmdset <command> show\|hide\|on\|off` | Tampilkan/sembunyikan atau aktifkan/matikan satu command |
@@ -494,6 +494,29 @@ Kategori `nsfw` sudah terdaftar sebagai placeholder dan muncul di `.menu` sebaga
 ---
 
 ## 💳 Pengaturan Limit (Owner)
+
+### Kelola premium & limit user
+
+Target bisa ditulis dengan **tiga cara** — nomor, mention, atau cukup reply pesan user:
+
+```
+.premium add 628123456789 30      # 30 hari
+.premium add 08123456789          # 08xx otomatis jadi 628xx
+.premium add @628123456789 30     # pakai mention
+.premium add 30                   # sambil reply pesan user -> 30 hari
+.limit add 628123456789 10        # +10 limit
+.limit add 10                     # sambil reply -> +10
+.limit del 628123456789 5         # kurangi 5
+.resetlimit 628123456789          # reset kuota harian (bonus owner tetap)
+```
+
+- `.premium add` langsung menaikkan kuota limit ke kuota premium, `.premium del` mengembalikannya ke kuota free.
+- Tambahan limit dari owner disimpan sebagai **bonus** (`limitBonus`) sehingga **tidak hilang saat reset limit harian**.
+- Kalau target tidak valid, bot hanya mengirim petunjuk format — tidak ada data user palsu yang dibuat.
+
+> ⚠️ Kalau command owner menjawab *"Fitur ini khusus owner bot"*, artinya `OWNER_NUMBER` di `.env` belum diisi nomor owner (format `628xx`, pisahkan dengan koma bila lebih dari satu): `OWNER_NUMBER="628123456789"`.
+
+### Atur fitur mana yang pakai limit
 
 Setiap plugin punya biaya limit bawaan (`handler.limit`). Owner bisa menimpanya **tanpa mengedit kode**:
 
