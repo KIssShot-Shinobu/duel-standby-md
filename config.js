@@ -163,6 +163,7 @@ export const config = {
     limit: env('MSG_LIMIT', '_*Limit kamu habis, tunggu besok atau upgrade ke premium*_'),
     premium: env('MSG_PREMIUM', '_*Fitur ini khusus pengguna premium*_'),
     owner: env('MSG_OWNER', '_*Fitur ini khusus owner bot*_'),
+    disabled: env('MSG_DISABLED', '_*Fitur ini sedang dimatikan oleh owner.*_'),
     admin: env('MSG_ADMIN', '_*Fitur ini khusus admin grup*_'),
     botAdmin: env('MSG_BOT_ADMIN', '_*Jadikan bot admin grup dulu*_'),
     group: env('MSG_GROUP', '_*Fitur ini hanya bisa dipakai di dalam grup*_'),

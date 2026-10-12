@@ -20,6 +20,7 @@ Bot **WhatsApp Multi-Device** yang ditulis ulang dari nol (clean-room) dengan ar
 - [Downloader YouTube (yt-dlp)](#-downloader-youtube-yt-dlp)
 - [Yu-Gi-Oh! (YGOPRODeck API)](#-yu-gi-oh-ygoprodeck-api)
   - [Game: Tebak Kartu](#-game-tebak-kartu-yu-gi-oh)
+- [Pengaturan Menu (Owner)](#-pengaturan-menu-owner)
 - [Troubleshooting](#-troubleshooting)
 - [Struktur Folder](#-struktur-folder)
 - [Menulis Plugin Sendiri](#-menulis-plugin-sendiri)
@@ -226,6 +227,9 @@ Prefix default: `.#!/,` (mis. `.menu`, `!ping`).
 | `.ban <nomor> [alasan]` / `.unban <nomor>` | Blokir user |
 | `.limit add\|del <nomor> <jumlah>` | Tambah/kurangi limit |
 | `.resetlimit <nomor>` | Reset limit harian |
+| `.menuset` | Ringkasan & pengaturan menu (lihat bagian di bawah) |
+| `.category <kategori> show\|hide\|on\|off` | Tampilkan/sembunyikan atau aktifkan/matikan satu kategori |
+| `.cmdset <command> show\|hide\|on\|off` | Tampilkan/sembunyikan atau aktifkan/matikan satu command |
 </details>
 
 <details>
@@ -435,6 +439,39 @@ Bot mengirim **art crop** kartu (`image_url_cropped`) — jadi **nama kartu tida
 | `YGO_QUIZ_REWARD` / `YGO_QUIZ_EXP` / `YGO_QUIZ_LIMIT` | `500` / `25` / `1` | Hadiah jawaban benar |
 
 Cek cepat tanpa WhatsApp: **`npm run check:quiz`** (ambil kartu asli, tampilkan art crop & pilihan, lalu jawab otomatis).
+
+---
+
+## ⚙️ Pengaturan Menu (Owner)
+
+Owner bisa mengatur **kategori & command mana yang tampil** di `.menu`, dan mana yang **boleh dipakai**:
+
+| Perintah | Fungsi |
+|---|---|
+| `.menuset` | Ringkasan semua kategori + jumlah command yang disembunyikan/dimatikan |
+| `.menuset list <kategori>` | Daftar command di kategori itu beserta statusnya |
+| `.category <kategori> show\|hide` | Tampilkan / sembunyikan seluruh kategori dari menu |
+| `.category <kategori> on\|off` | Aktifkan / matikan seluruh kategori (command diblokir) |
+| `.cmdset <command> show\|hide` | Tampilkan / sembunyikan satu command dari menu |
+| `.cmdset <command> on\|off` | Aktifkan / matikan satu command |
+
+**Bedanya `hide` dan `off`:**
+
+| Aksi | Muncul di `.menu` | Bisa dijalankan |
+|---|---|---|
+| `hide` | ❌ tidak | ✅ masih bisa (kalau tahu command-nya) |
+| `off` | ✅ masih muncul | ❌ diblokir — user diberi pesan *"Fitur ini sedang dimatikan oleh owner."* |
+| `hide` + `off` | ❌ tidak | ❌ diblokir |
+
+Pengaturan disimpan di database (`settings.menu`) sehingga bertahan setelah restart, dan `.help <command>` menampilkan status command tersebut.
+
+### 🔞 Kategori NSFW (sudah disiapkan, masih kosong)
+
+Kategori `nsfw` sudah terdaftar sebagai placeholder dan muncul di `.menu` sebagai **NSFW (18+) (0) — belum ada command**, tetapi **belum aktif** (`enabled: false`).
+
+- Mengaktifkan: `.category nsfw on` — lalu command NSFW bisa dipakai.
+- Menyembunyikan dari menu: `.category nsfw hide`.
+- **Menambah plugin NSFW nanti cukup**: buat file di `plugins/` dengan `handler.tags = ['nsfw']` — otomatis ikut aturan kategori ini (default tertutup sampai owner mengaktifkannya).
 
 ---
 

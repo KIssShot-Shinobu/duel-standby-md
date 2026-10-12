@@ -12,6 +12,7 @@ import { smsg, hasMeaningfulContent } from './lib/serialize.js';
 import * as Perm from './lib/permissions.js';
 import { Func, cleanJid } from './lib/functions.js';
 import { errorLog, errorText, isFriendlyError } from './lib/errors.js';
+import { isAdultCategory, pluginEnabled } from './lib/menu-config.js';
 import print from './lib/print.js';
 
 /** Pisahkan prefix, nama command dan argumen dari teks pesan. */
@@ -195,6 +196,15 @@ export async function handleMessage(conn, raw, deps) {
   if (config.bot.mode === 'self' && !isOwner && !isMods) return { handled: false, reason: 'self-mode' };
   if (config.flags.pcOnly && isGroup) return { handled: false, reason: 'pconly' };
   if (config.flags.gcOnly && !isGroup) return { handled: false, reason: 'gconly' };
+
+  // Menu config: command/kategori yang dimatikan owner tidak boleh dijalankan.
+  if (!pluginEnabled(db, entry)) {
+    // Kategori dewasa (nsfw) yang masih tertutup diabaikan diam-diam.
+    if (isAdultCategory(entry.category)) return { handled: false, reason: 'adult-disabled' };
+    await m.reply(config.messages.disabled || '_*Fitur ini sedang dimatikan oleh owner.*_').catch(() => {});
+    return { handled: false, reason: 'disabled' };
+  }
+
   if (ctx.user.banned) {
     await m.reply(config.messages.banned).catch(() => {});
     return { handled: false, reason: 'banned' };
