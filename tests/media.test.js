@@ -12,6 +12,8 @@ import {
   imageToWebp,
   isAnimatedWebp,
   isGif,
+  MAX_ANIMATED_STICKER_BYTES,
+  MAX_STICKER_BYTES,
   pickDownloadedFile,
   resolveYtDlp,
   runFfmpeg,
@@ -323,10 +325,10 @@ const mediaTmpDir = (prefix) => {
 };
 
 /** Buat GIF animasi kecil (butuh ffmpeg). */
-async function makeGif(dir, name = 'anim.gif') {
+async function makeGif(dir, name = 'anim.gif', { size = 64, seconds = 1, rate = 10 } = {}) {
   const target = path.join(dir, name);
   await runFfmpeg(
-    ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=size=64x64:rate=10:duration=1', '-y', target],
+    ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', `testsrc=size=${size}x${size}:rate=${rate}:duration=${seconds}`, '-y', target],
     null,
   );
   return fs.readFileSync(target);
@@ -501,6 +503,29 @@ test('plugin .sticker: tautan GIF juga diproses jadi stiker animasi', async (t) 
     fs.rmSync(dir, { recursive: true, force: true });
     fs.rmSync(harness.tmpDir, { recursive: true, force: true });
   }
+});
+
+test('videoToWebp menjaga ukuran stiker animasi di bawah batas WhatsApp', async (t) => {
+  if (!ffmpeg) return t.skip('ffmpeg tidak terpasang');
+  const dir = mediaTmpDir('cap');
+  // Sumber besar & berisik: kasus terburuk (tanpa pembatasan bisa > 1 MB)
+  const gif = await makeGif(dir, 'besar.gif', { size: 320, seconds: 5, rate: 12 });
+
+  const webp = await videoToWebp(gif, { seconds: 10 });
+  assert.equal(webp.subarray(8, 12).toString(), 'WEBP');
+  assert.equal(isAnimatedWebp(webp), true, 'harus tetap animasi');
+  assert.ok(
+    webp.length <= MAX_ANIMATED_STICKER_BYTES,
+    `stiker ${(webp.length / 1024).toFixed(0)}KB melebihi target ${MAX_ANIMATED_STICKER_BYTES / 1024}KB`,
+  );
+  assert.ok(webp.length <= MAX_STICKER_BYTES, 'tidak boleh melebihi batas keras WhatsApp 1MB');
+
+  // batas bisa diatur: target sangat kecil -> dipilih percobaan terkecil
+  const tiny = await videoToWebp(gif, { seconds: 2, maxBytes: 1 });
+  assert.ok(tiny.length < webp.length, 'harus turun kualitas saat target tidak tercapai');
+  assert.equal(isAnimatedWebp(tiny), true);
+
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test('audioExtension menebak jenis audio dari magic bytes', () => {

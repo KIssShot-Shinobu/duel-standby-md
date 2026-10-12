@@ -27,7 +27,7 @@ const premiums = toNumbers(envList('PREMIUM_NUMBER', []));
 export const config = {
   root: ROOT,
   /** Metadata proses */
-  version: '1.2.1',
+  version: '1.2.2',
   startedAt: Date.now(),
 
   bot: {
@@ -159,8 +159,10 @@ export const config = {
       saldoMax: envNumber('CHAT_SALDO_MAX', 9),
       /** jeda minimum antar hadiah per user (ms). 0 = tiap pesan dapat hadiah */
       cooldownMs: envNumber('CHAT_REWARD_COOLDOWN', 0),
-      /** kirim pesan saat user naik level */
-      levelUpNotice: env('CHAT_LEVELUP_NOTICE', 'true') !== 'false',
+      /** catat perolehan xp/saldo di terminal saja (tidak ada pesan ke user) */
+      log: env('CHAT_REWARD_LOG', 'true') !== 'false',
+      /** kirim pesan ke chat saat user naik level (default: tidak, cukup di terminal) */
+      levelUpNotice: env('CHAT_LEVELUP_NOTICE', 'false') === 'true',
     },
   },
 

@@ -277,11 +277,24 @@ Prefix default: `.#!/,` (mis. `.menu`, `!ping`).
 | `.s https://.../x.gif` | Stiker dari tautan |
 | `.smeme teks atas\|teks bawah` | **Stiker meme** dari gambar/GIF/reply, gaya memegen |
 
-**Tentang `.smeme`:** di project asli (RTXZY-MD) fitur ini **mengunggah gambarmu ke API pihak ketiga** (`file.botcahx.eu.org`) lalu meminta memegen.link merender meme-nya. Di sini dirender **lokal dengan ffmpeg `drawtext`** — tidak ada gambar yang dikirim ke layanan lain, dan tetap jalan walau internet mati.
-
-- Teks otomatis di-*wrap* (maks 3 baris) dan ukuran font menyesuaikan panjang teks.
+**Tentang `.smeme`:** di project asli (RTXZY-MD) fitur ini **mengunggah gambarmu ke API pihak ketiga** (`file.botcahx.eu.org`) lalu meminta memegen.link merender meme-nya. Di sini dirender **lokal dengan ffmpeg `drawtext`** — tidak ada gambar yang dikirim ke layanan lain, dan tetap jalan walau internet mati.- Teks otomatis di-*wrap* (maks 3 baris) dan ukuran font menyesuaikan panjang teks.
 - Butuh ffmpeg dengan `drawtext` + satu berkas font. Kalau font tidak ketemu: `apt install fonts-dejavu-core`, atau set `FFMPEG_FONT=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf` di `.env`.
 - Cek cepat di server: `ffmpeg -filters | grep drawtext`.
+
+### 📏 Ukuran stiker animasi (GIF) & batas WhatsApp
+
+WhatsApp **menolak stiker lebih dari 1 MB** — ini penyebab paling umum "stiker GIF gagal dikirim" (stiker diam biasanya kecil, stiker bergerak bisa jauh lebih besar).
+
+Bot sekarang meng-encode ulang secara bertahap sampai muat (target ≤ 500 KB): turun kualitas → fps → resolusi → durasi. Hasil nyata pada GIF berisik (kasus terburuk):
+
+| Sumber | Sebelum | Sesudah | Animasi |
+|---|---|---|---|
+| GIF 320×320, 2 dtk | 378 KB | **301 KB** | ✅ tetap animasi |
+| GIF 320×320, 5 dtk | 1008 KB ❌ | **234 KB** | ✅ tetap animasi |
+| GIF 512×512, 5 dtk | 884 KB | **192 KB** | ✅ tetap animasi |
+| GIF 512×512, 10 dtk | 1786 KB ❌ | **≤ 500 KB** | ✅ tetap animasi |
+
+Kalau sesuatu yang ekstrem masih melebihi 1 MB, bot otomatis mengirim **stiker statis (frame pertama)** supaya user tetap menerima stiker — dan alasannya dicatat di terminal (`[sticker] animasi ... melebihi batas WhatsApp`), bukan dikirim sebagai pesan error ke grup.
 
 <details>
 <summary><b>downloader</b></summary>
@@ -527,18 +540,16 @@ Sudah diuji: proses yang menerapkan 4 pengaturan lalu **dibunuh paksa (SIGKILL)*
 
 ## 💬 Hadiah Tiap Pesan (XP & Saldo)
 
-Setiap pesan dari user langsung mendapat **XP dan saldo acak 1–9** (keduanya diundi terpisah), tanpa balasan apa pun supaya chat tidak berisik:
+Setiap pesan dari user langsung mendapat **XP dan saldo acak 1–9** (keduanya diundi terpisah). **Tidak ada pesan apa pun yang dikirim ke chat** — perolehannya hanya dicatat di terminal:
 
 ```
-pesan 1 : +8 xp, +8 saldo   -> total   8 xp,   8 saldo
-pesan 2 : +8 xp, +7 saldo   -> total  16 xp,  15 saldo
-pesan 3 : +5 xp, +3 saldo   -> total  21 xp,  18 saldo
-...
-2 pesan = ~16 xp, 20 pesan = ~100 xp (rata-rata 5 xp & 5 saldo per pesan)
+[reward] 628111 +9 xp +8 saldo | total 9 xp, 8 saldo, level 0
+[reward] 628111 +4 xp +5 saldo | total 13 xp, 13 saldo, level 0
+[reward] 628111 +8 xp +2 saldo | total 21 xp, 15 saldo, level 0
 ```
 
-- Naik level otomatis diumumkan singkat ke chat: `🎉 *Nama* naik ke *level 2*` (level = `floor(sqrt(exp/100))` → level 1 di 100 xp, level 2 di 400 xp).
-- Hasilnya terlihat di `.profile` (exp, level, saldo) dan `.leaderboard`.
+User bisa cek sendiri kapan saja lewat `.profile` (exp, level, saldo) dan `.leaderboard`. Naik level (level = `floor(sqrt(exp/100))` → level 1 di 100 xp, level 2 di 400 xp) juga **tidak** diumumkan ke chat secara default; aktifkan dengan `CHAT_LEVELUP_NOTICE="true"` kalau mau.
+
 - **Tidak** diberi untuk: pesan bot sendiri, chat yang di-*mute*, user yang diblokir, dan pesan yang dihentikan hook (mis. anti-spam/anti-link).
 
 | Env | Default | Fungsi |
@@ -547,7 +558,8 @@ pesan 3 : +5 xp, +3 saldo   -> total  21 xp,  18 saldo
 | `CHAT_XP_MIN` / `CHAT_XP_MAX` | `1` / `9` | Rentang XP per pesan |
 | `CHAT_SALDO_MIN` / `CHAT_SALDO_MAX` | `1` / `9` | Rentang saldo per pesan |
 | `CHAT_REWARD_COOLDOWN` | `0` | Jeda minimum antar hadiah per user (ms). Naikkan (mis. `5000`) untuk mencegah farming |
-| `CHAT_LEVELUP_NOTICE` | `true` | Kirim pesan saat naik level |
+| `CHAT_REWARD_LOG` | `true` | Catat perolehan di terminal (set `"false"` kalau terminal terlalu ramai) |
+| `CHAT_LEVELUP_NOTICE` | `false` | `"true"` = kirim pesan naik level ke chat |
 
 ## 🩹 Troubleshooting
 

@@ -10,7 +10,7 @@
  */
 import { smsg, hasMeaningfulContent } from './lib/serialize.js';
 import * as Perm from './lib/permissions.js';
-import { Func, cleanJid } from './lib/functions.js';
+import { Func, cleanJid, bareNumber } from './lib/functions.js';
 import { errorLog, errorText, isFriendlyError } from './lib/errors.js';
 import { isAdultCategory, pluginEnabled } from './lib/menu-config.js';
 import { resolveLimit } from './lib/limit-config.js';
@@ -165,11 +165,17 @@ export async function handleMessage(conn, raw, deps) {
   db.touch();
 
   // 1b) Hadiah tiap pesan: XP & saldo acak (config.rewards.chat)
+  //     Tidak ada pesan apa pun ke user — hanya dicatat di terminal.
   const rewardEnabled = !m.fromMe && !ctx.user.banned && !(chat.mute && !isOwner && !isAdmin);
   const reward = rewardEnabled ? Perm.rewardChatMessage(db, m.sender, config) : null;
   if (reward) {
     m.exp = reward.exp;
     m.saldo = reward.saldo;
+    if (config.rewards?.chat?.log !== false) {
+      logger.info?.(
+        `[reward] ${bareNumber(m.sender)} +${reward.exp} xp +${reward.saldo} saldo | total ${reward.totalExp} xp, ${reward.totalSaldo} saldo, level ${reward.level}${reward.levelUp ? ' (NAIK LEVEL)' : ''}`,
+      );
+    }
     if (reward.levelUp && config.rewards?.chat?.levelUpNotice) {
       await m
         .reply(`🎉 *${m.pushName || m.sender.split('@')[0]}* naik ke *level ${reward.level}*`, m.chat, { mentions: [m.sender] })

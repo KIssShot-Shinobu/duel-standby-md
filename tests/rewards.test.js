@@ -176,7 +176,67 @@ test('chat yang di-mute tidak memberi hadiah', async () => {
   db.close();
 });
 
-test('pesan naik level dikirim ke chat', async () => {
+test('xp & saldo dicatat di terminal saja (tidak ada pesan ke user)', async () => {
+  const db = makeDb();
+  const plugins = new PluginManager(pluginsDir, { logger: quiet });
+  await plugins.loadAll();
+
+  const sent = [];
+  const logs = [];
+  const conn = {
+    user: { id: '628999@s.whatsapp.net' },
+    sendMessage: async (chat, content) => {
+      sent.push({ chat, content });
+      return { key: { id: `M${sent.length}`, remoteJid: chat } };
+    },
+    readMessages: async () => [],
+    groupMetadata: async () => ({ participants: [] }),
+    getName: async (jid) => String(jid).split('@')[0],
+  };
+  const capture = { ...quiet, info: (line) => logs.push(String(line)) };
+  const sender = '628111@s.whatsapp.net';
+  db.user(sender).exp = 0;
+
+  await handleMessage(conn, chatMessage('halo tanpa notifikasi'), { plugins, db, config, logger: capture });
+
+  assert.equal(sent.length, 0, 'tidak boleh ada pesan dikirim ke user');
+  assert.equal(logs.some((line) => line.includes('[reward]') && line.includes('+')), true, 'perolehan harus tercatat di terminal');
+  assert.equal(db.user(sender).exp > 0, true, 'xp tetap diberikan');
+  db.close();
+});
+
+test('naik level tidak dikirim ke chat secara default (hanya di terminal)', async () => {
+  const db = makeDb();
+  const plugins = new PluginManager(pluginsDir, { logger: quiet });
+  await plugins.loadAll();
+
+  const sent = [];
+  const logs = [];
+  const conn = {
+    user: { id: '628999@s.whatsapp.net' },
+    sendMessage: async (chat, content) => {
+      sent.push({ chat, content });
+      return { key: { id: `M${sent.length}`, remoteJid: chat } };
+    },
+    readMessages: async () => [],
+    groupMetadata: async () => ({ participants: [] }),
+    getName: async (jid) => String(jid).split('@')[0],
+  };
+  const capture = { ...quiet, info: (line) => logs.push(String(line)) };
+  const sender = '628111@s.whatsapp.net';
+  const user = db.user(sender);
+  user.exp = 99;
+  user.level = 0;
+
+  await handleMessage(conn, chatMessage('mau naik level'), { plugins, db, config, logger: capture });
+
+  assert.equal(user.level, 1, 'level tetap naik');
+  assert.equal(sent.length, 0, 'default: tidak ada pesan naik level ke chat');
+  assert.equal(logs.some((line) => line.includes('NAIK LEVEL')), true, 'level-up harus tercatat di terminal');
+  db.close();
+});
+
+test('pesan naik level dikirim ke chat kalau CHAT_LEVELUP_NOTICE diaktifkan', async () => {
   const { db, plugins, conn, sent } = await setup();
   const sender = '628111@s.whatsapp.net';
   const user = db.user(sender);
