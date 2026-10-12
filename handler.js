@@ -11,6 +11,7 @@
 import { smsg, hasMeaningfulContent } from './lib/serialize.js';
 import * as Perm from './lib/permissions.js';
 import { Func, cleanJid } from './lib/functions.js';
+import { errorLog, errorText, isFriendlyError } from './lib/errors.js';
 import print from './lib/print.js';
 
 /** Pisahkan prefix, nama command dan argumen dari teks pesan. */
@@ -154,7 +155,7 @@ export async function handleMessage(conn, raw, deps) {
       if (result === false) return { handled: false, reason: `before:${entry.name}` };
     } catch (err) {
       db.data.stats.errors = (db.data.stats.errors || 0) + 1;
-      logger.error?.(`[handler] before ${entry.name}: ${err.message}`);
+      logger.error?.(`[handler] before ${entry.name}: ${errorLog(err)}`);
     }
   }
 
@@ -184,7 +185,7 @@ export async function handleMessage(conn, raw, deps) {
         await hook.plugin.all(m, ctx);
       } catch (err) {
         db.data.stats.errors = (db.data.stats.errors || 0) + 1;
-        logger.error?.(`[handler] all ${hook.name}: ${err.message}`);
+        logger.error?.(`[handler] all ${hook.name}: ${errorLog(err)}`);
       }
     }
     return { handled: false, reason: 'no-plugin' };
@@ -255,10 +256,17 @@ export async function handleMessage(conn, raw, deps) {
   } catch (err) {
     db.data.stats.errors = (db.data.stats.errors || 0) + 1;
     db.touch();
-    logger.error?.(`[handler] ${entry.name}: ${err.stack || err.message}`);
-    const detail = config.flags.debug ? `\n\n\`\`\`${err.message}\`\`\`` : '';
+    logger.error?.(`[handler] ${entry.name}: ${errorLog(err)}`);
+
+    if (isFriendlyError(err)) {
+      // Plugin melempar pesan ramah (string / userError) -> teruskan ke pengguna.
+      await m.reply(errorText(err)).catch(() => {});
+      return { handled: false, plugin: entry.name, reason: 'user-error' };
+    }
+
+    const detail = config.flags.debug ? `\n\n\`\`\`${errorText(err)}\`\`\`` : '';
     await m.reply(`${config.messages.error}${detail}`).catch(() => {});
-    return { handled: false, plugin: entry.name, error: err.message };
+    return { handled: false, plugin: entry.name, error: errorText(err) };
   }
 }
 

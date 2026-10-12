@@ -540,6 +540,24 @@ handler.register = true               // wajib terdaftar
 handler.prefix   = false              // bisa dipanggil tanpa prefix
 ```
 
+### Menangani error di plugin
+
+Pesan yang salah dari sisi pengguna (mis. lupa kirim gambar) sebaiknya **ditampilkan apa adanya**, sedangkan error teknis (bug, jaringan, API mati) disamarkan:
+
+```js
+import { userError } from '../lib/errors.js';
+
+// ✅ pesan ramah -> langsung dikirim ke pengguna
+throw userError('❌ Kirim atau reply gambar dulu ya');
+// atau gaya lama yang tetap didukung:
+throw 'Kirim atau reply gambar dulu ya';
+
+// ❌ hindari untuk pesan ke pengguna: dianggap error teknis
+throw new Error('Kirim atau reply gambar dulu ya');
+```
+
+Error teknis dibalas dengan `global.eror` / `config.messages.error`; detail aslinya hanya muncul kalau bot dijalankan dengan `--debug`. Semua error (ramah maupun teknis) tetap dicatat di log.
+
 ### Hook event
 
 ```js

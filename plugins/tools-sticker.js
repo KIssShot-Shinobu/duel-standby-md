@@ -9,6 +9,7 @@
  */
 import fs from 'node:fs';
 import { webpEncoder } from '../lib/media.js';
+import { userError } from '../lib/errors.js';
 
 /** Cari pesan yang benar-benar berisi media (reply diprioritaskan). */
 function pickMediaSource(m) {
@@ -20,12 +21,17 @@ const handler = async (m, { conn, args, command, usedPrefix, config }) => {
   const source = pickMediaSource(m);
 
   if (!source) {
-    throw [
-      `Kirim atau reply *gambar/video* dengan caption *${usedPrefix}${command}*`,
-      '',
-      `Contoh: kirim foto + caption ${usedPrefix}${command}`,
-      `atau reply sebuah foto lalu kirim ${usedPrefix}${command}`,
-    ].join('\n');
+    throw userError(
+      [
+        '❌ *Tidak ada gambar/video* pada pesan ini.',
+        '',
+        'Cara pakai:',
+        `• Kirim foto/video dengan caption *${usedPrefix}${command}*`,
+        `• atau reply (geser) foto/video lalu kirim *${usedPrefix}${command}*`,
+        '',
+        `Durasi video maksimal ${config.media.maxStickerSeconds} detik.`,
+      ].join('\n'),
+    );
   }
 
   const content = source.msg || {};
@@ -34,36 +40,40 @@ const handler = async (m, { conn, args, command, usedPrefix, config }) => {
   const isVideo = /video\//i.test(mime);
 
   if (!isImage && !isVideo) {
-    throw `Tipe media *${mime || 'tidak diketahui'}* belum didukung.\nKirim gambar atau video (maksimal ${config.media.maxStickerSeconds} detik).`;
+    throw userError(
+      `❌ Tipe media *${mime || 'tidak diketahui'}* belum didukung.\nKirim gambar atau video (maksimal ${config.media.maxStickerSeconds} detik).`,
+    );
   }
 
   // Validasi durasi lebih dulu supaya pesannya lebih tepat daripada error encoder.
   const seconds = Number(content.seconds) || 0;
   if (isVideo && seconds > config.media.maxStickerSeconds) {
-    throw `Video terlalu panjang (${Math.round(seconds)}s). Maksimal ${config.media.maxStickerSeconds} detik.`;
+    throw userError(`❌ Video terlalu panjang (${Math.round(seconds)}s). Maksimal ${config.media.maxStickerSeconds} detik.`);
   }
 
   const encoder = webpEncoder();
   if (!encoder) {
-    throw [
-      '❌ Server belum punya encoder WebP, jadi stiker tidak bisa dibuat.',
-      '',
-      'Pasang salah satu:',
-      '• `apt install ffmpeg` (versi lengkap dengan libwebp)',
-      '• `apt install webp` (menyediakan perintah cwebp)',
-      '',
-      'Cek cepat: `ffmpeg -encoders | grep webp`',
-    ].join('\n');
+    throw userError(
+      [
+        '❌ Server belum punya encoder WebP, jadi stiker tidak bisa dibuat.',
+        '',
+        'Pasang salah satu:',
+        '• `apt install ffmpeg` (versi lengkap dengan libwebp)',
+        '• `apt install webp` (menyediakan perintah cwebp)',
+        '',
+        'Cek cepat: `ffmpeg -encoders | grep webp`',
+      ].join('\n'),
+    );
   }
   if (isVideo && encoder !== 'ffmpeg') {
-    throw '❌ Stiker dari video butuh ffmpeg dengan libwebp.\nPasang dengan: `apt install ffmpeg`.';
+    throw userError('❌ Stiker dari video butuh ffmpeg dengan libwebp.\nPasang dengan: `apt install ffmpeg`.');
   }
 
   const packname = args.join(' ').trim() || config.bot.packname;
   await m.reply(config.messages.stickerWait);
 
   const buffer = await source.download();
-  if (!buffer?.length) throw 'Gagal mengunduh media (file kosong). Coba kirim ulang fotonya.';
+  if (!buffer?.length) throw userError('❌ Gagal mengunduh media (file kosong). Coba kirim ulang fotonya.');
 
   const options = { packname, author: config.bot.author };
 
