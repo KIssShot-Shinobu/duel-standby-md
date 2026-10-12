@@ -13,7 +13,7 @@
  *  - Video/GIF dipotong otomatis ke `maxStickerSeconds`.
  */
 import fs from 'node:fs';
-import { detectMediaKind, webpEncoder } from '../lib/media.js';
+import { detectMediaKind, hasFfmpeg, stickerEncoder } from '../lib/media.js';
 import { loadMedia, mediaMime, pickMediaSource } from '../lib/media-source.js';
 import { userError } from '../lib/errors.js';
 
@@ -56,36 +56,39 @@ const handler = async (m, { conn, args, command, usedPrefix, config }) => {
   const mime = detected.mime || messageMime;
   const isGifLike = detected.kind === 'gif' || detected.kind === 'animated' || /gif/i.test(messageMime) || content.gifPlayback === true;
   const isVideo = detected.kind === 'video' || VIDEO_MIME.test(messageMime);
+  const isRealVideo = detected.kind === 'video';
   const isImage = detected.kind === 'image' || detected.kind === 'sticker' || IMAGE_MIME.test(messageMime) || IMAGE_MIME.test(mime);
 
-  const encoder = webpEncoder();
+  // Durasi divalidasi LEBIH DULU: video kepanjangan harus ditolak walau encoder
+  // belum tentu tersedia (dulu yang muncul malah pesan "tidak ada encoder").
+  const seconds = Number(content.seconds) || 0;
+  if (isVideo && !isGifLike && seconds > maxSeconds) {
+    throw userError(`❌ Video terlalu panjang (${Math.round(seconds)}s). Maksimal ${maxSeconds} detik.`);
+  }
+
+  const encoder = await stickerEncoder();
   if (!encoder) {
     throw userError(
       [
         '❌ Server belum punya encoder WebP, jadi stiker tidak bisa dibuat.',
         '',
-        'Pasang salah satu:',
-        '• `apt install ffmpeg` (versi lengkap dengan libwebp)',
-        '• `apt install webp` (menyediakan perintah cwebp)',
+        'Pilih salah satu (paling gampang dulu):',
+        '• `npm install sharp` — direkomendasikan, *tanpa ffmpeg* (GIF animasi jalan)',
+        '• `apt install ffmpeg` — lengkap dengan libwebp (sekalian untuk video & yt-dlp)',
+        '• `apt install webp` — menyediakan perintah cwebp (gambar diam saja)',
         '',
-        'Cek cepat: `ffmpeg -encoders | grep webp`',
+        'Cek cepat: `node -e "import(\'sharp\').then(()=>console.log(\'sharp OK\'))"`',
       ].join('\n'),
     );
   }
 
-  // GIF/WebP animasi/video => stiker animasi (butuh ffmpeg).
+  // GIF/WebP animasi/video => stiker animasi.
   if (isGifLike || isVideo) {
-    if (!isGifLike && encoder !== 'ffmpeg') {
-      throw userError('❌ Stiker dari video butuh ffmpeg dengan libwebp.\nPasang dengan: `apt install ffmpeg`.');
-    }
-    if (encoder !== 'ffmpeg') {
-      throw userError('❌ GIF/animasi butuh ffmpeg dengan libwebp.\nPasang dengan: `apt install ffmpeg`.');
-    }
-
-    // Video biasa: tolak kalau terlalu panjang. GIF dipotong otomatis.
-    const seconds = Number(content.seconds) || 0;
-    if (isVideo && !isGifLike && seconds > maxSeconds) {
-      throw userError(`❌ Video terlalu panjang (${Math.round(seconds)}s). Maksimal ${maxSeconds} detik.`);
+    // Video asli (mp4/webm) hanya bisa lewat ffmpeg; GIF/WebP animasi bisa lewat sharp.
+    if (isRealVideo && !hasFfmpeg()) {
+      throw userError(
+        '❌ Stiker dari video (mp4) butuh ffmpeg.\nPasang dengan: `apt install ffmpeg`.\n_(GIF tetap bisa distiker tanpa ffmpeg.)_',
+      );
     }
 
     const file = await conn.sendVideoAsSticker(m.chat, buffer, m, { ...options, seconds: maxSeconds });

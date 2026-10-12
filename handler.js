@@ -12,7 +12,7 @@ import { smsg, hasMeaningfulContent } from './lib/serialize.js';
 import * as Perm from './lib/permissions.js';
 import { Func, cleanJid, bareNumber } from './lib/functions.js';
 import { errorLog, errorText, isFriendlyError } from './lib/errors.js';
-import { isAdultCategory, pluginEnabled } from './lib/menu-config.js';
+import { categoryState, commandState, isAdultCategory } from './lib/menu-config.js';
 import { resolveLimit } from './lib/limit-config.js';
 import print from './lib/print.js';
 
@@ -72,8 +72,8 @@ function buildContext({ conn, m, db, config, plugins, groupCache, api, parsed, f
     getName: (jid) => conn.getName?.(jid),
   };
 
-  common.wait = async () => {
-    const sent = await m.reply(config.messages.wait);
+  common.wait = async (waitingText) => {
+    const sent = await m.reply(waitingText || config.messages.wait);
     return async (text) => {
       try {
         await conn.sendMessage(m.chat, { text: String(text), edit: sent.key });
@@ -116,6 +116,12 @@ export async function handleMessage(conn, raw, deps) {
     }
   }
   m.mentionedJid = [...new Set((m.mentionedJid || []).map((jid) => db.resolveLid(jid)))];
+  // Pesan yang di-reply juga bisa berasal dari user ber-LID. Tanpa ini, command
+  // owner seperti `.premium add` / `.limit add` (yang mengandalkan m.quoted.sender)
+  // menulis ke record LID yang berbeda dari record nomor telepon user tersebut,
+  // sehingga premium/limit seolah tidak masuk.
+  if (m.quoted?.sender) m.quoted.sender = db.resolveLid(m.quoted.sender);
+  if (m.quoted?.senderAlt) m.quoted.senderAlt = db.resolveLid(m.quoted.senderAlt);
 
   db.data.stats.messages = (db.data.stats.messages || 0) + 1;
   const chat = db.chat(m.chat);
@@ -139,7 +145,9 @@ export async function handleMessage(conn, raw, deps) {
 
   const isOwner = Perm.isOwner(m.sender, config);
   const isMods = Perm.isMods(m.sender, config);
-  const isAdmin = participants.length ? Perm.isParticipantAdmin(groupMetadata, m.sender) : false;
+  // Identitas bisa datang sebagai LID atau nomor telepon — cocokkan keduanya.
+  const senderIds = [m.sender, m.senderLid, m.senderAlt];
+  const isAdmin = participants.length ? Perm.isParticipantAdmin(groupMetadata, m.sender, senderIds) : false;
   const isBotAdmin = participants.length ? Perm.isParticipantAdmin(groupMetadata, conn.user?.id) : false;
   const user = db.user(m.sender);
   const isPremium = Perm.isPremiumUser(user, m.sender, config);
@@ -172,8 +180,9 @@ export async function handleMessage(conn, raw, deps) {
     m.exp = reward.exp;
     m.saldo = reward.saldo;
     if (config.rewards?.chat?.log !== false) {
+      const who = m.pushName ? `${m.pushName} (${bareNumber(m.sender)})` : bareNumber(m.sender);
       logger.info?.(
-        `[reward] ${bareNumber(m.sender)} +${reward.exp} xp +${reward.saldo} saldo | total ${reward.totalExp} xp, ${reward.totalSaldo} saldo, level ${reward.level}${reward.levelUp ? ' (NAIK LEVEL)' : ''}`,
+        `[reward] ${who} +${reward.exp} xp +${reward.saldo} saldo │ total ${reward.totalExp} xp • ${reward.totalSaldo} saldo • level ${reward.level}${reward.levelUp ? ' • NAIK LEVEL' : ''}`,
       );
     }
     if (reward.levelUp && config.rewards?.chat?.levelUpNotice) {
@@ -218,11 +227,20 @@ export async function handleMessage(conn, raw, deps) {
   if (config.flags.gcOnly && !isGroup) return { handled: false, reason: 'gconly', reward };
 
   // Menu config: command/kategori yang dimatikan owner tidak boleh dijalankan.
-  if (!pluginEnabled(db, entry)) {
-    // Kategori dewasa (nsfw) yang masih tertutup diabaikan diam-diam.
-    if (isAdultCategory(entry.category)) return { handled: false, reason: 'adult-disabled', reward };
-    await m.reply(config.messages.disabled || '_*Fitur ini sedang dimatikan oleh owner.*_').catch(() => {});
-    return { handled: false, reason: 'disabled', reward };
+  const commandOn = commandState(db, entry.name).enabled;
+  const categoryOn = categoryState(db, entry.category).enabled;
+  if (!commandOn || !categoryOn) {
+    // Pengecualian: plugin bertanda `adultExempt` (mis. toggle NSFW per grup)
+    // tetap boleh jalan ketika kategori dewasanya dimatikan owner, supaya admin
+    // grup dapat balasan yang jelas — plugin itu sendiri yang menolak mengirim
+    // konten selama kategori masih mati.
+    const exempt = commandOn && !categoryOn && isAdultCategory(entry.category) && entry.plugin.adultExempt === true;
+    if (!exempt) {
+      // Kategori dewasa (nsfw) yang masih tertutup diabaikan diam-diam.
+      if (isAdultCategory(entry.category)) return { handled: false, reason: 'adult-disabled', reward };
+      await m.reply(config.messages.disabled || '_*Fitur ini sedang dimatikan oleh owner.*_').catch(() => {});
+      return { handled: false, reason: 'disabled', reward };
+    }
   }
 
   if (ctx.user.banned) {

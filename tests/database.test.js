@@ -5,9 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { Database, DEFAULT_USER, initDatabase } from '../lib/database.js';
-import { consumeLimit, levelFromExp, levelProgress, expForLevel, refreshLimit } from '../lib/permissions.js';
+import { consumeLimit, isParticipantAdmin, levelFromExp, levelProgress, expForLevel, refreshLimit } from '../lib/permissions.js';
 
 const tmpDir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'rtxzy-db-'));
+const quiet = { warn() {}, error() {}, info() {}, debug() {} };
 
 test('database: default, user, dan chat', async () => {
   const dir = tmpDir();
@@ -97,7 +98,92 @@ test('database: pemetaan LID -> nomor telepon', () => {
   db.close();
 });
 
-test('permissions: limit, premium, dan level', () => {  const dir = tmpDir();
+test('database: pemetaan LID tidak menghapus premium/limit dari owner', () => {
+  const dir = tmpDir();
+  const db = new Database(path.join(dir, 'database.json'), { saveInterval: 5, logger: quiet });
+  db.load();
+
+  const lid = '999888777666555@lid';
+  const pn = '628111222333@s.whatsapp.net';
+
+  // Owner memberi premium + limit saat target masih tercatat sebagai LID.
+  const lidUser = db.user(lid);
+  lidUser.premium = true;
+  lidUser.premiumUntil = Date.now() + 30 * 86400000;
+  lidUser.limitBonus = 10;
+  lidUser.limit = 30;
+
+  // Record nomor telepon sudah ada tapi masih default (premium=false, limit=0).
+  db.user(pn);
+
+  assert.equal(db.mapLid(lid, pn), true);
+  const merged = db.user(pn);
+  assert.equal(merged.premium, true, 'premium tidak boleh hilang saat penggabungan');
+  assert.ok(merged.premiumUntil > Date.now(), 'masa premium harus ikut');
+  assert.equal(merged.limitBonus, 10, 'bonus limit owner tidak boleh hilang');
+  assert.ok(merged.limit >= 30, `limit hasil gabung terlalu kecil: ${merged.limit}`);
+  assert.equal(db.data.users[lid], undefined, 'record LID harus dilebur');
+  db.close();
+});
+
+test('database: user(LID) memakai record nomor telepon setelah dipetakan', () => {
+  const dir = tmpDir();
+  const db = new Database(path.join(dir, 'database.json'), { saveInterval: 5, logger: quiet });
+  db.load();
+
+  const lid = '111222333444555@lid';
+  const pn = '628555666777@s.whatsapp.net';
+
+  db.mapLid(lid, pn);
+  const viaLid = db.user(lid);
+  const viaPn = db.user(pn);
+
+  assert.equal(viaLid.jid, pn, 'user(LID) harus menunjuk record nomor telepon');
+  assert.equal(viaLid, viaPn, 'harus object yang sama, bukan record terpisah');
+
+  // premium yang ditulis lewat LID tetap terlihat lewat nomor telepon
+  viaLid.premium = true;
+  viaLid.limitBonus = 5;
+  assert.equal(db.user(pn).premium, true);
+  assert.equal(db.user(pn).limitBonus, 5);
+  db.close();
+});
+
+test('database: load() melebur sisa record LID dari versi lama', () => {
+  const dir = tmpDir();
+  const file = path.join(dir, 'database.json');
+  const pn = '6289530694332@s.whatsapp.net';
+  const lid = '271446714642565@lid';
+
+  fs.writeFileSync(
+    file,
+    JSON.stringify({
+      meta: {},
+      settings: {},
+      stats: {},
+      users: {
+        [lid]: { jid: lid, premium: true, premiumUntil: Date.now() + 86400000, limitBonus: 7, limit: 40, saldo: 12 },
+        [pn]: { jid: pn, premium: false, limitBonus: 0, limit: 0 },
+      },
+      chats: {},
+      lidMap: { [lid]: pn },
+    }),
+    'utf8',
+  );
+
+  const db = new Database(file, { saveInterval: 5, logger: quiet });
+  db.load();
+
+  const user = db.user(pn);
+  assert.equal(user.premium, true, 'premium di record LID harus ikut pindah');
+  assert.equal(user.limitBonus, 7, 'bonus limit harus ikut pindah');
+  assert.equal(user.saldo, 12, 'saldo harus ikut pindah');
+  assert.equal(db.data.users[lid], undefined, 'record LID harus dilebur saat load');
+  db.close();
+});
+
+test('permissions: limit, premium, dan level', () => {
+  const dir = tmpDir();
   const db = new Database(path.join(dir, 'database.json'), { saveInterval: 5, logger: { warn() {}, error() {} } });
   db.load();
   const config = { limits: { free: 10, premium: 50, resetIntervalMs: 86400000 }, bot: { premiumJids: [], owners: [] } };
@@ -118,4 +204,24 @@ test('permissions: limit, premium, dan level', () => {  const dir = tmpDir();
   assert.equal(levelFromExp(400), 2);
   assert.equal(levelProgress(400).percent, 0);
   db.close();
+});
+
+test('permissions: admin grup dikenali walau identitas LID/nomor berbeda', () => {
+  // daftar peserta memakai LID, pengirim terbaca sebagai nomor telepon
+  const metadataLid = {
+    participants: [{ id: '271446714642565@lid', admin: 'admin' }, { id: '628222222222@s.whatsapp.net' }],
+  };
+  assert.equal(isParticipantAdmin(metadataLid, '628111111111@s.whatsapp.net', ['271446714642565@lid']), true);
+  assert.equal(isParticipantAdmin(metadataLid, '628222222222@s.whatsapp.net'), false, 'bukan admin');
+
+  // sebaliknya: daftar peserta memakai nomor telepon, pengirim terbaca sebagai LID
+  const metadataPn = { participants: [{ id: '628111111111@s.whatsapp.net', admin: 'superadmin' }] };
+  assert.equal(isParticipantAdmin(metadataPn, '271446714642565@lid', ['628111111111@s.whatsapp.net']), true);
+
+  // kolom identitas alternatif peserta ikut dicek (lid/phoneNumber)
+  const metadataAlt = { participants: [{ lid: '999888777666555@lid', phoneNumber: '628333333333', admin: 'admin' }] };
+  assert.equal(isParticipantAdmin(metadataAlt, '628333333333@s.whatsapp.net'), true);
+
+  assert.equal(isParticipantAdmin({ participants: [] }, '628111111111@s.whatsapp.net'), false);
+  assert.equal(isParticipantAdmin(null, '628111111111@s.whatsapp.net'), false);
 });

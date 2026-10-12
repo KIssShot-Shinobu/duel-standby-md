@@ -3,7 +3,8 @@
  *   .promote @user
  *   .demote @user
  */
-import { getTargets, bareNumber } from '../lib/functions.js';
+import { getTargets } from '../lib/functions.js';
+import { friendlyNumber, joinLines } from '../lib/messages.js';
 
 const handler = async (m, { conn, args, command, config }) => {
   const targets = getTargets(m, args).filter((jid) => jid !== conn.user?.id);
@@ -16,13 +17,12 @@ const handler = async (m, { conn, args, command, config }) => {
   for (const jid of targets) {
     try {
       await conn.groupParticipantsUpdate(m.chat, [jid], action);
-      results.push(`✅ ${bareNumber(jid)} ${label}`);
-    } catch (err) {
-      results.push(`❌ ${bareNumber(jid)} -> ${err.message}`);
+      results.push(`${friendlyNumber(jid)} ${label}.`);
+    } catch (e) {
+      results.push(`${friendlyNumber(jid)} gagal: ${e.message}`);
     }
   }
-  user.totalCommands = (user.totalCommands || 0) + 0; // sentuh user (biar konsisten tersimpan)
-  return m.reply(`*「 ${action.toUpperCase()} 」*\n\n${results.join('\n')}`);
+  return m.reply(joinLines(`*${action.charAt(0).toUpperCase() + action.slice(1)} selesai*\n\n${results.join('\n')}`));
 };
 
 handler.help = ['promote', 'demote'];

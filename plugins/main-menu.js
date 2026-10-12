@@ -2,99 +2,136 @@
  * Menu utama: menampilkan command yang terdaftar, dikelompokkan per kategori.
  * Kategori/command yang disembunyikan owner tidak ikut tampil (lihat lib/menu-config.js).
  *
- *   .menu            -> seluruh kategori
- *   .menu tools      -> hanya kategori tools
- *   .help sticker    -> detail sebuah command
+ *   .menu              -> ringkasan semua kategori (nama utama saja, hemat baris)
+ *   .menu tools        -> detail satu kategori (termasuk alias + biaya limit)
+ *   .help sticker      -> detail sebuah command
+ *
+ * Tampilan sengaja dibuat ringkas: nama utama per plugin, dibungkus beberapa
+ * kolom, satu baris kosong antar kategori — dulu setiap alias menempati satu
+ * baris sendiri sehingga menu bisa 130+ baris.
  */
-import { KNOWN_CATEGORIES, categoryState, commandState, ensureMenuSettings, formatState } from '../lib/menu-config.js';
+import { KNOWN_CATEGORIES, categoryState, commandState, ensureMenuSettings, formatState, wrapCommands } from '../lib/menu-config.js';
 import { formatLimitInfo, resolveLimit } from '../lib/limit-config.js';
+import { commandList, joinLines, userName } from '../lib/messages.js';
 
-const handler = async (m, { conn, plugins, config, db, usedPrefix, args }) => {
+/** Urutan kategori yang enak dibaca; sisanya alfabetis. */
+const CATEGORY_ORDER = ['main', 'owner', 'group', 'tools', 'downloader', 'fun', 'ai', 'rpg', 'game', 'image', 'nsfw', 'info', 'event'];
+
+const RULE = '─'.repeat(24);
+
+const sortCategories = (tags) =>
+  [...tags].sort((a, b) => {
+    const ia = CATEGORY_ORDER.indexOf(a);
+    const ib = CATEGORY_ORDER.indexOf(b);
+    if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    return a.localeCompare(b);
+  });
+
+const categoryLabel = (tag) => KNOWN_CATEGORIES[tag]?.label || tag.toUpperCase();
+
+/** Nama utama sebuah plugin (alias pertama / command pertama). */
+const primaryName = (entry) => entry.help[0] || entry.commands[0] || entry.name.replace(/\.js$/, '');
+
+/** Semua nama (utama + alias) sebuah plugin. */
+const allNames = (entry) => (entry.help.length ? entry.help : entry.commands).filter(Boolean);
+
+const handler = async (m, { conn, plugins, config, db, usedPrefix, args, isOwner }) => {
   ensureMenuSettings(db);
   const prefix = usedPrefix || config.bot.prefix[0];
-  const query = (args[0] || '').toLowerCase();
+  const query = String(args[0] || '').toLowerCase();
 
-  if (query) {
-    const entry = plugins.find(query);
-    if (entry) {
-      const helps = entry.help.length ? entry.help.join(', ') : '(tidak ada alias)';
-      const lines = [
-        `*「 ${query.toUpperCase()} 」*`,
-        '',
-        `📄 File     : ${entry.name}`,
-        `🏷️ Kategori : ${entry.category}`,
-        `⌨️ Alias    : ${helps}`,
-        `💳 Limit    : ${formatLimitInfo(resolveLimit(db, entry))}`,
-        `⚙️ Status   : ${formatState({ ...commandState(db, entry.name), enabled: commandState(db, entry.name).enabled && categoryState(db, entry.category).enabled })}`,
-        `🔒 Khusus   : ${[
-          entry.plugin.owner && 'owner',
-          entry.plugin.premium && 'premium',
-          entry.plugin.admin && 'admin grup',
-          entry.plugin.group && 'di grup',
-          entry.plugin.private && 'chat pribadi',
-          entry.plugin.register && 'terdaftar',
-        ].filter(Boolean).join(', ') || 'semua orang'}`,
-        '',
-        `Contoh: ${prefix}${entry.help[0] || query}`,
-      ];
-      return m.reply(lines.join('\n'));
-    }
-  }
-
-  // Gabungkan kategori dari plugin dengan kategori bawaan (mis. nsfw yang masih kosong)
+  // Kategori terlihat
   const categoryMap = new Map(plugins.categories());
   for (const tag of Object.keys(KNOWN_CATEGORIES)) if (!categoryMap.has(tag)) categoryMap.set(tag, []);
 
-  const now = new Date();
-  const jam = new Intl.DateTimeFormat('id-ID', {
-    timeZone: config.bot.timezone,
-    dateStyle: 'full',
-    timeStyle: 'short',
-  }).format(now);
-
-  const visibleCategories = [...categoryMap.entries()]
-    .map(([tag, entries]) => [
-      tag,
-      entries.filter((entry) => commandState(db, entry.name).visible),
-    ])
+  const visible = [...categoryMap.entries()]
+    .map(([tag, entries]) => [tag, entries.filter((entry) => commandState(db, entry.name).visible)])
     .filter(([tag]) => categoryState(db, tag).visible);
+  const categories = sortCategories(visible.map(([tag]) => tag)).map((tag) => [tag, visible.find(([item]) => item === tag)?.[1] || []]);
 
-  const header = [
-    `╭─「 *${config.bot.name}* 」`,
-    `│ 👤 ${m.pushName || m.sender.split('@')[0]}`,
-    `│ 🕒 ${jam}`,
-    `│ 📦 ${plugins.size} file plugin`,
-    `│ 🔑 Prefix: ${config.bot.prefix.join(' ')}`,
-    `╰────`,
-  ].join('\n');
+  // ── Detail satu command: `.help sticker` / `.menu sticker` ──────────────
+  const entry = query ? plugins.find(query) : null;
+  if (entry && commandState(db, entry.name).visible) {
+    const limit = resolveLimit(db, entry);
+    const categoryEnabled = categoryState(db, entry.category).enabled;
+    const names = allNames(entry);
+    const status = formatState({ ...commandState(db, entry.name), enabled: commandState(db, entry.name).enabled && categoryEnabled });
+    const khusus = [
+      entry.plugin.owner && 'owner',
+      entry.plugin.premium && 'premium',
+      entry.plugin.admin && 'admin grup',
+      entry.plugin.group && 'di grup',
+      entry.plugin.private && 'chat pribadi',
+      entry.plugin.register && 'terdaftar',
+    ].filter(Boolean).join(', ') || 'semua orang';
 
-  const wanted = query ? visibleCategories.filter(([tag]) => tag === query) : visibleCategories;
-  if (!wanted.length) {
-    return m.reply(
-      `${header}\n\n❌ Kategori *${query}* tidak ditemukan atau disembunyikan.\nKategori tersedia: ${visibleCategories.map(([tag]) => tag).join(', ')}`,
-    );
+    const text = [
+      `📋 *${names[0]?.toUpperCase() || query.toUpperCase()}*`,
+      '',
+      `📄 File: ${entry.name}`,
+      `🏷️ Kategori: ${categoryLabel(entry.category)}`,
+      `⌨️ Alias: ${names.join(', ') || '(tidak ada)'}`,
+      `💳 Limit: ${formatLimitInfo(limit)}`,
+      `⚙️ Status: ${status}`,
+      `🔒 Khusus: ${khusus}`,
+      '',
+      `💡 Contoh: ${prefix}${names[0] || query}`,
+    ].join('\n');
+    
+    return conn.sendMessage(m.chat, { text }, { quoted: m });
   }
 
-  const totalCommands = visibleCategories.reduce(
-    (sum, [, entries]) => sum + entries.filter((entry) => entry.help.length || entry.commands.length).length,
-    0,
-  );
-
-  const blocks = wanted.map(([tag, entries]) => {
-    const names = entries
-      .flatMap((entry) => (entry.help.length ? entry.help : entry.commands))
-      .filter(Boolean)
-      .sort();
-    const label = KNOWN_CATEGORIES[tag]?.label || tag.toUpperCase();
-    if (!names.length) {
-      return `╭─「 ${label} (0) 」\n│ _(belum ada command)_\n╰────`;
+  // ── Detail satu kategori ────────────────────────────────────────────────
+  if (query) {
+    const found = categories.find(([tag]) => tag === query);
+    if (!found) {
+      return m.reply(joinLines(`Kategori *${query}* gak ketemu atau disembunyikan.\nKategori: ${categories.map(([tag]) => tag).join(', ')}`));
     }
-    return `╭─「 ${label} (${names.length}) 」\n${names.map((name) => `│ ${prefix}${name}`).join('\n')}\n╰────`;
-  });
 
-  const footer = `\n📊 ${totalCommands} command tampil dari ${plugins.size} plugin.\n💡 ${prefix}menu <kategori> untuk filter, ${prefix}help <command> untuk detail.`;
+    const [tag, entries] = found;
+    const list = entries.filter((e) => e.help.length || e.commands.length).sort((a, b) => primaryName(a).localeCompare(primaryName(b)));
+    const disabledCategory = !categoryState(db, tag).enabled;
 
-  return conn.sendMessage(m.chat, { text: `${header}\n\n${blocks.join('\n')}${footer}` }, { quoted: m });
+    const cmds = list.map((entry) => {
+      const names = allNames(entry).map((name) => `${prefix}${name}`).join(' · ');
+      const limit = resolveLimit(db, entry);
+      const off = !commandState(db, entry.name).enabled || disabledCategory;
+      const badges = [limit.cost > 0 ? `${limit.cost} limit` : 'gratis', off && isOwner ? 'dimatikan' : ''].filter(Boolean);
+      return `${names}${badges.length ? ` (${badges.join(' · ')})` : ''}`;
+    });
+
+    const title = `${categoryLabel(tag)} — ${list.length} command`;
+    return conn.sendMessage(m.chat, { text: commandList(title, cmds, prefix) }, { quoted: m });
+  }
+
+  // ── Ringkasan semua kategori ────────────────────────────────────────────
+  const blocks = [];
+  let totalCommands = 0;
+
+  for (const [tag, entries] of categories) {
+    const list = entries.filter((e) => e.help.length || e.commands.length).sort((a, b) => primaryName(a).localeCompare(primaryName(b)));
+    const off = !categoryState(db, tag).enabled;
+    if (!list.length) {
+      blocks.push(`${categoryLabel(tag)} (${list.length})${off && isOwner ? ' ⛔' : ''}\n   Belum ada command di sini.`);
+      continue;
+    }
+    totalCommands += list.length;
+    const cmds = list.map(primaryName);
+    blocks.push(`${categoryLabel(tag)} (${list.length})${off && isOwner ? ' ⛔' : ''}\n${wrapCommands(cmds, { prefix }).join('\n')}`);
+  }
+
+  const summary = [
+    `🤖 *${config.bot.name}* v${config.version}`,
+    `👤 Hai ${userName(m)}!`,
+    `📦 ${plugins.size} plugin · ${categories.length} kategori · ${totalCommands} command`,
+    '',
+    // Satu baris kosong antar kategori supaya tidak menempel dan tetap enak dibaca.
+    blocks.join('\n\n'),
+    '',
+    `💡 Ketik \`${prefix}menu <kategori>\` buat liat detail, atau \`${prefix}help <command>\``,
+  ].join('\n');
+
+  return conn.sendMessage(m.chat, { text: summary }, { quoted: m });
 };
 
 handler.help = ['menu', 'help', 'bantuan'];

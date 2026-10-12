@@ -10,6 +10,7 @@ import path from 'node:path';
 import './lib/env.js';
 import { env, envNumber, envList } from './lib/env.js';
 import { parseArgv, flagEnabled } from './lib/argv.js';
+import { DEFAULT_BLOCKED_TAGS } from './lib/image-source.js';
 
 const ROOT = path.resolve(import.meta.dirname);
 const { flags, positionals } = parseArgv();
@@ -27,7 +28,7 @@ const premiums = toNumbers(envList('PREMIUM_NUMBER', []));
 export const config = {
   root: ROOT,
   /** Metadata proses */
-  version: '1.2.3',
+  version: '1.3.0',
   startedAt: Date.now(),
 
   bot: {
@@ -131,7 +132,38 @@ export const config = {
       rewardSaldo: envNumber('YGO_QUIZ_REWARD', 500),
       rewardExp: envNumber('YGO_QUIZ_EXP', 25),
       rewardLimit: envNumber('YGO_QUIZ_LIMIT', 1),
+      /** Mode gambar-saja (.tebakgambar): jawaban harus persis, tanpa pilihan */
+      imageRounds: envNumber('YGO_IMAGE_ROUNDS', 3),
+      imageTimeoutMs: envNumber('YGO_IMAGE_TIMEOUT', 90000),
+      imageAttempts: envNumber('YGO_IMAGE_ATTEMPTS', 5),
+      /** Biaya limit untuk membeli petunjuk (.hint) */
+      hintCost: envNumber('YGO_HINT_COST', 3),
+      /** Maksimal berapa kali satu pemain membeli petunjuk per ronde */
+      maxHints: envNumber('YGO_MAX_HINTS', 3),
     },
+  },
+
+  /**
+   * Gambar anime: `.sfw` (aman) dan `.nsfw` (18+, kategori mati secara default).
+   * Provider & urutan fallback diatur di sini; detail di lib/image-source.js.
+   */
+  images: {
+    timeoutMs: envNumber('IMAGE_TIMEOUT', 20000),
+    /** Batas ukuran berkas yang diunduh (byte) */
+    maxBytes: envNumber('IMAGE_MAX_BYTES', 8 * 1024 * 1024),
+    /** Berapa hasil yang diminta ke booru per panggilan (untuk diacak lokal) */
+    limitPosts: envNumber('IMAGE_LIMIT_POSTS', 30),
+    /** Berapa lama daftar hasil di-cache (ms) supaya API tidak dibombardir */
+    listTtlMs: envNumber('IMAGE_LIST_TTL', 600000),
+    cacheDir: env('IMAGE_CACHE_DIR', path.join('database', 'cache', 'images')),
+    cacheMax: envNumber('IMAGE_CACHE_MAX', 200),
+    /** Urutan provider (lihat lib/image-source.js): danbooru, yandere, purrbot, nekosbest, safebooru */
+    providers: {
+      nsfw: envList('NSFW_PROVIDERS', ['danbooru', 'yandere', 'purrbot']),
+      sfw: envList('IMAGE_PROVIDERS', ['nekosbest', 'danbooru', 'yandere', 'safebooru', 'purrbot']),
+    },
+    /** Tag yang ditolak di input dan disaring dari hasil (konten anak = garis merah) */
+    blockedTags: envList('IMAGE_BLOCKED_TAGS', DEFAULT_BLOCKED_TAGS),
   },
 
   ytdlp: {
@@ -173,20 +205,20 @@ export const config = {
   },
 
   messages: {
-    wait: env('MSG_WAIT', '_*Tunggu sedang di proses...*_'),
-    error: env('MSG_ERROR', '_*Terjadi kesalahan pada server*_'),
-    stickerWait: env('MSG_STICKER_WAIT', '*â«¹â«º Stiker sedang dibuat...*'),
-    banned: env('MSG_BANNED', '_*Kamu diblokir dari bot ini*_'),
-    limit: env('MSG_LIMIT', '_*Limit kamu habis, tunggu besok atau upgrade ke premium*_'),
-    premium: env('MSG_PREMIUM', '_*Fitur ini khusus pengguna premium*_'),
-    owner: env('MSG_OWNER', '_*Fitur ini khusus owner bot*_'),
-    disabled: env('MSG_DISABLED', '_*Fitur ini sedang dimatikan oleh owner.*_'),
-    admin: env('MSG_ADMIN', '_*Fitur ini khusus admin grup*_'),
-    botAdmin: env('MSG_BOT_ADMIN', '_*Jadikan bot admin grup dulu*_'),
-    group: env('MSG_GROUP', '_*Fitur ini hanya bisa dipakai di dalam grup*_'),
-    private: env('MSG_PRIVATE', '_*Fitur ini hanya bisa dipakai di chat pribadi*_'),
-    register: env('MSG_REGISTER', '_*Kamu belum terdaftar. Ketik .daftar nama.umur dulu*_'),
-    readonly: env('MSG_READONLY', '_*Bot sedang dalam mode self (hanya owner)*_'),
+    wait: env('MSG_WAIT', 'Sebentar ya...'),
+    error: env('MSG_ERROR', 'Ups, ada yang error di server.'),
+    stickerWait: env('MSG_STICKER_WAIT', 'Stiker lagi dibuat...'),
+    banned: env('MSG_BANNED', 'Kamu diblokir dari bot ini.'),
+    limit: env('MSG_LIMIT', 'Limit kamu udah habis. Reset besok ya, atau upgrade ke premium.'),
+    premium: env('MSG_PREMIUM', 'Fitur ini khusus pengguna premium.'),
+    owner: env('MSG_OWNER', 'Fitur ini khusus owner bot.'),
+    disabled: env('MSG_DISABLED', 'Fitur ini lagi dimatikan sama owner.'),
+    admin: env('MSG_ADMIN', 'Fitur ini khusus admin grup.'),
+    botAdmin: env('MSG_BOT_ADMIN', 'Jadiin bot admin grup dulu ya.'),
+    group: env('MSG_GROUP', 'Fitur ini cuma bisa dipakai di grup.'),
+    private: env('MSG_PRIVATE', 'Fitur ini cuma bisa dipakai di chat pribadi.'),
+    register: env('MSG_REGISTER', 'Kamu belum daftar. Ketik .daftar nama.umur dulu.'),
+    readonly: env('MSG_READONLY', 'Bot lagi mode self (hanya owner).'),
   },
 
   /** Argumen mentah, berguna untuk debug/plugin */

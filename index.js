@@ -25,6 +25,9 @@ let child = null;
 let shuttingDown = false;
 let restarts = 0;
 
+/** Path relatif dengan pemisah '/' supaya log tetap rapi di Windows. */
+const relPath = (target) => (path.relative(config.root, target) || target).split(path.sep).join('/');
+
 async function startHealth() {
   if (!config.flags.health) return null;
   try {
@@ -34,7 +37,7 @@ async function startHealth() {
       statusFile: config.health.statusFile,
       meta: { author: config.bot.name, version: config.version },
     });
-    print.success(`Health server aktif di ${health.url} (GET / dan GET /health)`);
+    print.kv('Health', `${health.url} • GET / dan GET /health`, { tag: 'success' });
     return health;
   } catch (err) {
     print.warn(`Health server gagal start: ${err.message}`);
@@ -86,7 +89,11 @@ const health = await startHealth();
 if (!config.flags.health) print.warn('Health server dimatikan (--no-health).');
 
 startBot();
-print.info(`Supervisor aktif. Config: mode=${config.bot.mode}, prefix="${config.bot.prefix.join('')}", db=${path.relative(config.root, config.database.file)}`);
+print.rows([
+  ['Supervisor', 'aktif — bot dijalankan ulang otomatis kalau berhenti'],
+  ['Mode', `${config.bot.mode} • prefix "${config.bot.prefix.join('')}"`],
+  ['Database', relPath(config.database.file)],
+]);
 
 const shutdown = async (signal) => {
   if (shuttingDown) return;

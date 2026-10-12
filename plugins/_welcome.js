@@ -6,6 +6,7 @@
  * anggota masuk, keluar, diangkat, atau diturunkan.
  */
 import { bareNumber } from '../lib/functions.js';
+import { greet, farewell } from '../lib/messages.js';
 
 const handler = {};
 
@@ -17,11 +18,11 @@ handler.onGroupParticipants = async (conn, update, { chat, groupMetadata, config
   const jids = update.participants || [];
 
   const labels = {
-    add: '👋 *SELAMAT DATANG*',
-    remove: '👋 *SAMPAI JUMPA*',
-    promote: '⬆️ *JADI ADMIN*',
-    demote: '⬇️ *TURUN JABATAN*',
-    leave: '👋 *KELUAR*',
+    add: '👋 *Selamat datang!*',
+    remove: '👋 *Sampai jumpa!*',
+    promote: '⬆️ *Jadi admin!*',
+    demote: '⬇️ *Turun jabatan.*',
+    leave: '👋 *Keluar dari grup.*',
   };
 
   const title = labels[update.action] || `ℹ️ *${String(update.action).toUpperCase()}*`;

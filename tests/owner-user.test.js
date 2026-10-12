@@ -112,6 +112,20 @@ test('.premium add saat reply pesan user (tanpa menulis nomor)', async () => {
   db.close();
 });
 
+test('.premium add saat masih aktif menambah hari dari sisa masa aktif', async () => {
+  const { db } = makeDb();
+  await run(db, { command: 'premium', args: ['add', TARGET, '30'] });
+  const user = db.user(TARGET_JID);
+
+  user.premiumUntil = Date.now() + 5 * 86400000; // sisa 5 hari
+  const reply = await run(db, { command: 'premium', args: ['add', TARGET, '30'] });
+
+  const sisaHari = (user.premiumUntil - Date.now()) / 86400000;
+  assert.ok(sisaHari > 34.9 && sisaHari < 35.1, `harusnya ~35 hari, dapat ${sisaHari.toFixed(2)}`);
+  assert.match(reply, /diperpanjang/i);
+  db.close();
+});
+
 test('.premium del mencabut premium dan mengembalikan kuota free', async () => {
   const { db } = makeDb();
   await run(db, { command: 'premium', args: ['add', TARGET, '30'] });
@@ -140,6 +154,21 @@ test('.limit add menambah limit user baru dan bertahan setelah reset harian', as
   user.lastLimitReset = Date.now() - 25 * 60 * 60 * 1000;
   const afterReset = refreshLimit(db, user, config);
   assert.equal(afterReset, config.limits.free + 10, 'bonus owner tidak boleh hilang saat reset');
+  db.close();
+});
+
+test('.limit add menyelaraskan kuota harian (angka sama dengan yang dilihat user)', async () => {
+  const { db } = makeDb();
+  const user = db.user(TARGET_JID);
+  // seolah kuota kemarin habis & jadwal reset sudah lewat
+  user.lastLimitReset = Date.now() - 25 * 60 * 60 * 1000;
+  user.limit = 0;
+
+  const reply = await run(db, { command: 'limit', args: ['add', TARGET, '10'] });
+
+  assert.equal(user.limit, config.limits.free + 10, 'kuota harian di-refresh dulu, baru ditambah 10');
+  assert.equal(refreshLimit(db, user, config), user.limit, 'angka balasan owner harus sama dengan .profile user');
+  assert.match(reply, /kuota harian/);
   db.close();
 });
 

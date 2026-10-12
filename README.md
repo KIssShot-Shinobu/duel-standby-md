@@ -43,7 +43,7 @@ Bot **WhatsApp Multi-Device** yang ditulis ulang dari nol (clean-room) dengan ar
 | **Permission** | Owner / mods / premium / admin grup / bot admin / grup-only / private-only / wajib daftar / banned / mute / expired |
 | **Ekonomi** | Limit harian (auto reset), exp & level, saldo, bank, daily reward, leaderboard, **hadiah tiap pesan (xp & saldo acak 1–9)** |
 | **Database** | JSON dengan **penulisan atomik** (tmp → rename), debounce save, auto-backup file rusak, skema user & chat otomatis |
-| **Media** | Stiker (gambar & video) + metadata EXIF, stiker → gambar, audio/video → mp3, → voice note — semua lewat **ffmpeg**, tanpa dependency native |
+| **Media** | Stiker (gambar & GIF animasi via **sharp**, video via ffmpeg) + metadata EXIF, stiker → gambar, audio/video → mp3, → voice note |
 | **Downloader** | YouTube (yt-dlp, tanpa API key), pencarian YouTube (yt-search), TikTok tanpa watermark |
 | **AI (opsional)** | Chat AI kompatibel OpenAI (OpenAI, Groq, OpenRouter, Ollama, …) dengan riwayat per chat |
 | **Event** | Anti-link, anti-spam, AFK, welcome/goodbye + notifikasi admin grup |
@@ -59,11 +59,12 @@ Bot **WhatsApp Multi-Device** yang ditulis ulang dari nol (clean-room) dengan ar
 | Komponen | Keterangan |
 |---|---|
 | **Node.js** | **20.11+** (disarankan 22 LTS) |
-| **ffmpeg** | Untuk stiker & konversi audio/video (`sticker`, `tovn`, `tomp3`, `toimg`) |
+| **sharp** | Terpasang otomatis lewat `npm install`. Encoder stiker WebP (termasuk GIF → stiker **animasi**) **tanpa ffmpeg** |
+| **ffmpeg** | Untuk video → stiker, GIF WhatsApp (`gifPlayback`), audio/video (`tovn`, `tomp3`, `toimg`, meme) |
 | **yt-dlp** | Opsional — untuk `ytmp3` / `ytmp4` |
 | RAM | ±150–300 MB saat idle |
 
-Tanpa ffmpeg bot tetap jalan; hanya command media yang akan menolak dengan pesan jelas.
+Tanpa ffmpeg bot tetap jalan: stiker dari **gambar & GIF** tetap dibuat lewat `sharp`, GIF juga bisa dikirim sebagai stiker animasi. Yang butuh ffmpeg hanya video (mp4) → stiker, GIF WhatsApp (`gifPlayback`), konversi audio/video, dan meme.
 
 ---
 
@@ -198,6 +199,32 @@ AI_BASE="https://api.openai.com/v1"
 AI_KEY=""                       # opsional, untuk plugin .ai
 ```
 
+### 🖥️ Log terminal
+
+Semua output konsol memakai satu format supaya kolomnya lurus:
+
+```text
+────────────────────────────────────────────────────
+🜲 RTXZY Clean  v1.3.0
+WhatsApp multi-device • Node 22.11.0 • zona waktu Asia/Jakarta
+────────────────────────────────────────────────────
+21:32:25 OK   Mode        public • prefix ".#!/,"
+21:32:25 OK   Database    database/database.json • 12 user • 4 chat
+21:32:25 OK   Plugin      47 file • 94 command • 5 hook
+21:32:25 INFO ffmpeg      tersedia
+21:32:25 INFO Kategori    ai, downloader, event, fun, game, group, info, main, owner, rpg, tools
+21:32:26 OK   Health      http://127.0.0.1:3000 • GET / dan GET /health
+21:32:27 GRUP grup 1203630... ← Budi (628111) [text] halo semua
+21:32:28 GRUP grup 1203630... » .tebakgambar oleh Budi (628111)
+21:32:29 INFO [reward] Budi (628111) +5 xp +3 saldo │ total 120 xp • 40 saldo • level 1
+```
+
+- Jam selalu `HH:mm:ss` (24 jam) dan tag selalu 4 karakter (`INFO`, `OK`, `WARN`, `ERR`, `DBG`) supaya sejajar.
+- JID dipendekkan (`628111@s.whatsapp.net` → `628111`), chat grup ditulis `grup <id>`. Pakai `LOG_LEVEL=debug` kalau butuh JID penuh.
+- Log internal (pino/Baileys) ikut diformat ulang — tidak ada lagi JSON mentah di konsol; field tambahan tampil sebagai `key=value` dan stack error di baris berikutnya.
+- `LOG_LEVEL`: `silent` (default kalau bukan `--debug`), `info`, atau `debug`/`trace`.
+- `npm run check` kini ringkas (hanya file bermasalah yang dicetak); tambahkan `npm run check -- --verbose` untuk daftar semua file.
+
 ---
 
 ## 📜 Daftar Command
@@ -209,13 +236,44 @@ Prefix default: `.#!/,` (mis. `.menu`, `!ping`).
 
 | Command | Fungsi |
 |---|---|
-| `.menu [kategori]` | Daftar command per kategori |
-| `.help <command>` | Detail sebuah command |
+| `.menu` | Ringkasan semua kategori (ringkas: satu blok per kategori) |
+| `.menu <kategori>` | Detail kategori: semua alias + biaya limit per command |
+| `.help <command>` | Detail sebuah command (file, alias, limit, status, syarat) |
 | `.ping` / `.speed` | Latensi & ringkasan runtime |
 | `.info` | Info bot |
-| `.profile` / `.profil` / `.me` | Profil user (level, exp, limit, saldo) |
+| `.profile` / `.profil` / `.me` | Profil sendiri (level, exp, limit, saldo, premium) |
+| `.profile <nomor\|@mention\|reply>` | Profil user lain — **owner** (untuk verifikasi premium/limit yang baru diberikan) |
 | `.daftar Nama.20` | Registrasi user |
 </details>
+
+### 🎨 Tampilan `.menu`
+
+Ringkasannya hanya memuat **nama utama** tiap plugin (bukan semua alias), dibungkus beberapa kolom, dengan satu baris kosong antar kategori — dari 134 baris jadi ±54 baris:
+
+```text
+╭─「 *RTXZY Clean* 」v1.3.0
+│ 👤 Owner
+│ 🕒 12 Okt 2026 · 22.42
+│ 🔑 Prefix : . # ! / ,
+│ 📦 Plugin : 49 file · 13 kategori
+╰────────────────────────
+
+▸ *MAIN* (3)
+   .info · .menu · .ping
+
+▸ *GAME* (9)
+   .archetype · .banlist · .card
+   .cardset · .tebakgambar · .tebakygo
+   .ygo · .ygorandom · .ygosearch
+
+────────────────────────
+📊 *46* command · *13* kategori · *99* alias
+💡 .menu <kategori> untuk detail · .help <command>
+```
+
+- `.menu <kategori>` menampilkan **semua alias + biaya limit** per command, mis. `.tebakygo · .nyerah · .stoptebak · .yugoscore (gratis)`.
+- `.help <command>` menampilkan detail satu command (file, kategori, alias, limit, status, syarat, contoh).
+- Owner melihat penanda **⛔** pada kategori/command yang sedang dimatikan.
 
 <details>
 <summary><b>owner</b> — khusus owner</summary>
@@ -277,6 +335,11 @@ Prefix default: `.#!/,` (mis. `.menu`, `!ping`).
 | `.s https://.../x.gif` | Stiker dari tautan |
 | `.smeme teks atas\|teks bawah` | **Stiker meme** dari gambar/GIF/reply, gaya memegen |
 
+**Encoder stiker:** `sharp` (prioritas) → ffmpeg (libwebp) → `cwebp` sebagai cadangan.
+- **Gambar** dan **GIF/WebP animasi** → WebP via **sharp**, jadi stiker GIF tetap **animasi walau ffmpeg tidak terpasang** (ini yang dulu gagal: pipeline lama hanya mengandalkan ffmpeg).
+- **Video (mp4/webm)** → stiker masih butuh ffmpeg; pesannya jelas kalau belum ada.
+- `sharp` ikut terpasang lewat `npm install`. Kalau gagal dipasang, bot otomatis memakai ffmpeg/cwebp (tanpa error).
+
 **Tentang `.smeme`:** di project asli (RTXZY-MD) fitur ini **mengunggah gambarmu ke API pihak ketiga** (`file.botcahx.eu.org`) lalu meminta memegen.link merender meme-nya. Di sini dirender **lokal dengan ffmpeg `drawtext`** — tidak ada gambar yang dikirim ke layanan lain, dan tetap jalan walau internet mati.- Teks otomatis di-*wrap* (maks 3 baris) dan ukuran font menyesuaikan panjang teks.
 - Butuh ffmpeg dengan `drawtext` + satu berkas font. Kalau font tidak ketemu: `apt install fonts-dejavu-core`, atau set `FFMPEG_FONT=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf` di `.env`.
 - Cek cepat di server: `ffmpeg -filters | grep drawtext`.
@@ -320,6 +383,7 @@ Kalau sesuatu yang ekstrem masih melebihi 1 MB, bot otomatis mengirim **stiker s
 | `.cardset <nama>` / `.setcode <kode>` / `.cardsets` | Info booster pack & kartu di dalamnya |
 | `.banlist [tcg\|ocg\|goat]` | Daftar kartu Forbidden/Limited |
 | `.tebakygo` | **Game tebak kartu** (lihat bagian di bawah) |
+| `.tebakgambar` / `.hint` | **Game gambar-saja** — tulis nama kartunya, ada petunjuk berbayar |
 </details>
 
 <details>
@@ -334,6 +398,21 @@ Kalau sesuatu yang ekstrem masih melebihi 1 MB, bot otomatis mengirim **stiker s
 | `.leaderboard [exp\|saldo\|level]` | Papan peringkat |
 | `.afk [alasan]` | Status AFK |
 | `.tqto` | Kredit |
+</details>
+
+<details>
+<summary><b>image / nsfw</b> — gambar anime (gratis, tanpa API key)</summary>
+
+| Command | Fungsi |
+|---|---|
+| `.sfw [kategori\|tag]` | Gambar anime **aman** (nekos.best, Danbooru safe, yande.re safe, Safebooru, PurrBot) |
+| `.sfwlist` | Daftar kategori SFW yang tersedia |
+| `.nsfw on` / `.nsfw off` | Nyalakan/matikan **18+ di grup ini** (admin grup / owner bot) |
+| `.nsfw [tag]` | Gambar **18+** (Danbooru → yande.re → PurrBot) — bawaan **mati per grup** |
+| `.nsfwstatus` / `.nsfwlist` | Status & daftar kategori NSFW |
+
+> Gambar diunduh lalu dikirim (bukan hotlink), caption memuat provider + artist + tautan sumber.
+> Setup, env, dan aturan keamanan: [Kategori NSFW (18+)](#-kategori-nsfw-18-aktif-opsional).
 </details>
 
 ---
@@ -439,8 +518,40 @@ Bot mengirim **art crop** kartu (`image_url_cropped`) — jadi **nama kartu tida
 - Pemain yang percobaannya habis diberi tahu **sekali**, lalu tebakannya diabaikan — ronde tetap jalan untuk pemain lain.
 - Jawaban benar → **+500 saldo, +25 exp, +1 limit** (bisa diatur lewat env) dan dihitung di `.yugoscore`.
 - Default 60 detik per ronde; waktu habis → jawaban dibuka otomatis dan lanjut ronde berikutnya.
-- Jawaban toleran salah ketik (mis. `dark magican` tetap benar) dan passcode kartu juga diterima.
+- Jawaban toleran salah ketik (mis. `dark magican` tetap benar) dan passcode kartu juga diterima. *(Khusus `.tebakygo` — mode `.tebakgambar` di bawah ini **tidak** toleran typo.)*
 - Satu game per chat; hanya pembuat game/admin/owner yang bisa menghentikannya.
+
+#### 🖼️ Mode gambar saja: `.tebakgambar`
+
+Versi **tanpa pilihan ganda**: bot hanya mengirim gambarnya, lalu pemain **menulis sendiri nama kartunya**. Dipakai kalau grup sudah kenal kartu-kartunya dan mau tantangan lebih sulit.
+
+| Command | Fungsi |
+|---|---|
+| `.tebakgambar` | Mulai (**gambar saja, tanpa pilihan A–D**), default **3 ronde** |
+| `.tebakgambar 5` | 5 ronde (dibatasi `YGO_QUIZ_MAX_ROUNDS`) |
+| `.hint` / `.petunjuk` / `.clue` | Beli petunjuk: **3 limit**, maksimal **3x per pemain per ronde** |
+| `.nyerah` | Buka jawaban lalu lanjut ronde berikutnya |
+| `.stoptebak` | Hentikan game (pembuat game / admin / owner) |
+| `.yugoscore` | Papan skor (dipakai bersama, sama seperti `.tebakygo`) |
+
+**Aturan khusus mode ini**
+- ✅ Jawaban **harus tepat**: hanya **besar/kecil huruf, spasi berlebih, dan tanda baca** yang dimaklumi — `Blue-Eyes White Dragon` = `blue eyes white dragon` = `BLUE EYES  WHITE DRAGON`.
+- ❌ Salah ketik tetap **salah** (`dark magican` ditolak) dan jawaban sebagian ditolak.
+- 💡 Petunjuk **berbayar 3 limit** dan **dibatasi 3x per pemain per ronde** (jatah masing-masing pemain, bukan per grup). Tiap pembelian makin terbuka: `D*** M*******` → `Da*k Ma*****n` → lebih terbuka lagi. Kalau jatah habis, bot menolak **sebelum** memotong limit.
+- 🚫 Tidak ada petunjuk otomatis gratis di mode ini — satu-satunya bantuan adalah `.hint`.
+- 🎯 5 percobaan per pemain per ronde, 90 detik per ronde (bisa diatur lewat env di bawah).
+- 💰 Hadiah jawaban benar tetap +500 saldo, +25 exp, +1 limit, dan dihitung di `.yugoscore`.
+- 💳 Mulai game memotong 1 limit; limit dikembalikan otomatis kalau game gagal dimulai (mis. masih ada game lain di chat yang sama).
+
+**Env pengaturan mode gambar**
+
+| Env | Default | Fungsi |
+|---|---|---|
+| `YGO_IMAGE_ROUNDS` | `3` | Jumlah ronde default `.tebakgambar` |
+| `YGO_IMAGE_TIMEOUT` | `90000` | Durasi per ronde (ms) |
+| `YGO_IMAGE_ATTEMPTS` | `5` | Percobaan maksimum per pemain per ronde |
+| `YGO_HINT_COST` | `3` | Harga 1 petunjuk dalam limit (`0` = gratis) |
+| `YGO_MAX_HINTS` | `3` | Maksimal pembelian petunjuk per pemain per ronde |
 
 **Env pengaturan**
 
@@ -456,7 +567,7 @@ Bot mengirim **art crop** kartu (`image_url_cropped`) — jadi **nama kartu tida
 | `YGO_QUIZ_ROUND_DELAY` | `2500` | Jeda antar ronde (ms) |
 | `YGO_QUIZ_REWARD` / `YGO_QUIZ_EXP` / `YGO_QUIZ_LIMIT` | `500` / `25` / `1` | Hadiah jawaban benar |
 
-Cek cepat tanpa WhatsApp: **`npm run check:quiz`** (ambil kartu asli, tampilkan art crop & pilihan, lalu jawab otomatis).
+Cek cepat tanpa WhatsApp: **`npm run check:quiz`** (ambil kartu asli lalu uji **dua mode**: pilihan ganda + gambar-saja dengan jawaban persis & batas petunjuk berbayar).
 
 ---
 
@@ -483,13 +594,94 @@ Owner bisa mengatur **kategori & command mana yang tampil** di `.menu`, dan mana
 
 Pengaturan disimpan di database (`settings.menu`) sehingga bertahan setelah restart, dan `.help <command>` menampilkan status command tersebut.
 
-### 🔞 Kategori NSFW (sudah disiapkan, masih kosong)
+### 🔞 Kategori NSFW (18+) — aktif opsional
 
-Kategori `nsfw` sudah terdaftar sebagai placeholder dan muncul di `.menu` sebagai **NSFW (18+) (0) — belum ada command**, tetapi **belum aktif** (`enabled: false`).
+Kategori `nsfw` sudah punya plugin (**`nsfw-image.js`**) tapi **mati secara default** (`enabled: false`), jadi `.nsfw` diabaikan diam-diam sampai owner mengaktifkannya. Ini disengaja: konten 18+ harus opt-in.
 
-- Mengaktifkan: `.category nsfw on` — lalu command NSFW bisa dipakai.
-- Menyembunyikan dari menu: `.category nsfw hide`.
-- **Menambah plugin NSFW nanti cukup**: buat file di `plugins/` dengan `handler.tags = ['nsfw']` — otomatis ikut aturan kategori ini (default tertutup sampai owner mengaktifkannya).
+| Command | Fungsi |
+|---|---|
+| `.nsfw on` / `.nsfw off` | **Nyalakan/matikan 18+ di grup ini** — admin grup atau owner bot |
+| `.nsfwstatus` | Status kategori bot + status grup ini |
+| `.nsfw` | Gambar acak 18+ (`rating:explicit`) |
+| `.nsfw cat_ears` | Cari sesuai tag booru |
+| `.nsfw neko` | Kategori tetap PurrBot (`anal`, `blowjob`, `yuri`, `yaoi`, …) |
+| `.nsfwlist` | Daftar kategori + contoh tag + cara pakai |
+| `.sfw [kategori\|tag]` | **Pasangan amannya** — lihat tabel di bawah |
+| `.sfwlist` | Daftar kategori SFW |
+
+**Dua lapis kontrol:**
+
+| Lapis | Siapa yang mengatur | Caranya |
+|---|---|---|
+| 1. Kategori bot (master switch) | **Owner bot** | **Nyala secara default.** Kalau dimatikan (`.category nsfw off`), semua gambar 18+ diblokir total — tapi `on/off/status/list` tetap dijawab supaya admin grup tahu keadaannya |
+| 2. Per grup (opt-in) | **Admin grup** atau owner bot | `.nsfw on` di grup itu — bawaan **mati**, jadi tiap grup harus setuju sendiri |
+
+- Owner bot bisa menyalakan/mematikan di grup mana pun tanpa jadi admin; admin grup hanya di grupnya sendiri.
+- Deteksi admin tahan beda identitas: WhatsApp bisa mengirim **LID** di daftar peserta sementara pengirim terbaca sebagai **nomor telepon** (atau sebaliknya) — keduanya tetap dicocokkan, jadi admin grup tetap dikenali.
+- Di chat pribadi, hanya owner bot yang bisa menyalakan (`admin grup` tidak relevan).
+- `.nsfw on|off|status|list` **tidak memotong limit** (limit otomatis dikembalikan); hanya pengambilan gambar yang berbiaya, bawaan **1 limit** (owner bisa ubah: `.limitcmd nsfw 3`).
+- Mematikan satu command untuk semua orang: `.cmdset nsfw-image.js off`.
+
+#### Gambar aman (SFW) — selalu aktif
+
+`sfw-image.js` masuk kategori **IMAGE** dan aktif sejak awal (tidak perlu diaktifkan per grup):
+
+| Command | Fungsi |
+|---|---|
+| `.sfw` | Gambar acak (nekos.best: neko/waifu/husbando/kitsune) |
+| `.sfw hug` | Kategori siap pakai (nekos.best & PurrBot) |
+| `.sfw cat_ears` | Tag booru (Safebooru / Danbooru `rating:safe` / yande.re safe) |
+| `.sfwlist` | Daftar kategori yang tersedia |
+
+#### Provider & fallback
+
+Urutan default (bisa diatur lewat env `NSFW_PROVIDERS` / `IMAGE_PROVIDERS`):
+
+| Mode | Urutan |
+|---|---|
+| SFW | `nekosbest` → `danbooru` (safe) → `yandere` (safe) → `safebooru` → `purrbot` |
+| NSFW | `danbooru` (explicit) → `yandere` (explicit) → `purrbot` |
+
+Semua provider **gratis tanpa akun**. Kalau satu provider error/kosong, bot otomatis pindah ke berikutnya; kalau semuanya gagal, user dapat pesan ramah (bukan stack trace).
+
+#### Yang sudah diterapkan di kode
+
+- 🚫 **Filter konten anak dua lapis** — tag seperti `loli`, `shota`, `child`, `cub` ditolak **sebelum** request, dan hasil API yang mengandung tag itu **dibuang** (wajib; ini garis merah, bukan opsi).
+- ⬇️ **Unduh lalu kirim**, bukan hotlink — sesuai permintaan tiap API, dan hasilnya di-cache di `database/cache/images/` (buang otomatis kalau lewat `IMAGE_CACHE_MAX`).
+- 🎞️ **GIF tetap bergerak**: sumber GIF dikirim sebagai **GIF WhatsApp** (`video` + `gifPlayback`, butuh ffmpeg). Kalau server tanpa ffmpeg, otomatis dikonversi jadi **stiker WebP animasi** lewat `sharp` + caption atribusi dikirim terpisah — jadi tidak pernah "diam".
+- ⏱️ **Hemat kuota API** — daftar hasil di-cache `IMAGE_LIST_TTL` ms per (provider, tag), 1 request per provider per panggilan, plus dedup per chat supaya gambar sama tidak dikirim dua kali berturut-turut.
+- 🧾 **Atribusi** — caption selalu memuat provider, rating, nama artist (kalau ada), dan tautan sumber.
+- 🛡️ **Batas ukuran** `IMAGE_MAX_BYTES` (default 8 MB) supaya kiriman tidak melebihi batas WhatsApp.
+
+#### Env pengaturan
+
+| Env | Default | Fungsi |
+|---|---|---|
+| `IMAGE_PROVIDERS` | `nekosbest,danbooru,yandere,safebooru,purrbot` | Urutan provider SFW |
+| `NSFW_PROVIDERS` | `danbooru,yandere,purrbot` | Urutan provider NSFW |
+| `IMAGE_BLOCKED_TAGS` | daftar bawaan (17 tag) | Tag yang ditolak/disaring |
+| `IMAGE_TIMEOUT` | `20000` | Timeout request (ms) |
+| `IMAGE_MAX_BYTES` | `8388608` | Batas ukuran gambar yang diunduh |
+| `IMAGE_LIMIT_POSTS` | `30` | Jumlah hasil yang diminta ke booru (untuk diacak lokal) |
+| `IMAGE_LIST_TTL` | `600000` | Lama cache daftar hasil (ms) |
+| `IMAGE_CACHE_DIR` | `database/cache/images` | Folder cache gambar |
+| `IMAGE_CACHE_MAX` | `200` | Maksimum berkas di cache |
+
+#### Uji cepat di server
+
+```bash
+npm run check:image          # uji pipeline .sfw (unduh 1 gambar ke memori)
+npm run check:image -- --nsfw # sekalian uji .nsfw
+npm run check:nsfw           # cek provider mana yang bisa diakses dari IP server
+```
+
+#### ⚠️ Sebelum menyalakan
+
+- **Konten 18+ hanya untuk dewasa.** Pengiriman gambar eksplisit lewat WhatsApp bisa membuat **nomor di-ban**. Karena itu fitur ini **opt-in per grup** (`.nsfw on` oleh admin grup) — jangan nyalakan di grup campuran; untuk grup umum lebih aman dikirim sebagai **tautan sumber** saja (ada di caption).
+- Di Indonesia, penyebaran konten pornografi diatur **UU No. 44/2008** (ada sanksi pidana). Risiko ditanggung pemilik bot.
+- Foto/ilustrasi tetap milik artist-nya — caption menyertakan sumber; jangan hapus atribusi.
+
+📚 Riset lengkap API (termasuk kenapa **Pixiv tidak dipakai**, serta opsi Gelbooru, rule34.xxx, e621, nhentai, MangaDex): [`docs/NSFW-API-RESEARCH.md`](docs/NSFW-API-RESEARCH.md).
 
 ---
 
@@ -512,6 +704,9 @@ Target bisa ditulis dengan **tiga cara** — nomor, mention, atau cukup reply pe
 
 - `.premium add` langsung menaikkan kuota limit ke kuota premium, `.premium del` mengembalikannya ke kuota free.
 - Tambahan limit dari owner disimpan sebagai **bonus** (`limitBonus`) sehingga **tidak hilang saat reset limit harian**.
+- Balasan `.limit add|del` sekarang menampilkan **kuota harian setelah reset** supaya angkanya sama dengan yang dilihat user di `.profile`. Kuota harian di-refresh lebih dulu kalau jadwal resetnya sudah lewat.
+- **Cara memastikan sudah masuk:** `.profile <nomor>` (owner) — profil menampilkan `Premium : ya (sampai ...)` dan `Limit : 110/110 (+10 bonus owner)`. User juga bisa cek sendiri dengan `.profile`; angkanya akan sama karena identitas LID & nomor telepon dipetakan ke satu record.
+- Target ber-**LID** (`...@lid`, WhatsApp versi baru) otomatis dipetakan ke nomor teleponnya lewat `db.resolveLid`, termasuk pesan yang di-reply. Jadi `.premium add` / `.limit add` tidak lagi menulis ke record LID yang berbeda. Kalau premium/limit telanjur tersimpan di record LID sebelum pemetaan diketahui, datanya digabung ke record nomor telepon **tanpa kehilangan premium maupun bonus limit**.
 - Kalau target tidak valid, bot hanya mengirim petunjuk format — tidak ada data user palsu yang dibuat.
 
 > ⚠️ Kalau command owner menjawab *"Fitur ini khusus owner bot"*, artinya `OWNER_NUMBER` di `.env` belum diisi nomor owner (format `628xx`, pisahkan dengan koma bila lebih dari satu): `OWNER_NUMBER="628123456789"`.
@@ -591,8 +786,9 @@ User bisa cek sendiri kapan saja lewat `.profile` (exp, level, saldo) dan `.lead
 | Pesan / gejala | Penyebab & solusi |
 |---|---|
 | Bot bilang *"Kirim atau reply gambar/video"* padahal ada gambarnya | Sudah diperbaiki di v1.1 (dulu `m.msg` berisi kontainer pesan sehingga `m.msg.mimetype` kosong). Pastikan memakai ZIP terbaru. |
-| *"Server belum punya encoder WebP"* | ffmpeg build minimal tanpa libwebp. Jalankan `ffmpeg -encoders \| grep webp`. Kalau kosong: `apt install ffmpeg` (lengkap) atau `apt install webp` (bot otomatis pakai `cwebp` untuk gambar). |
-| Video ditolak | Batas durasi stiker video 10 detik (`MAX_STICKER_SECONDS`), dan stiker animasi wajib ffmpeg (bukan cwebp). |
+| *"Server belum punya encoder WebP"* | Tidak ada `sharp`, ffmpeg, maupun `cwebp`. Paling gampang: `npm install sharp` (tanpa ffmpeg). Alternatif: `apt install ffmpeg` atau `apt install webp`. |
+| Stiker GIF error / jadi diam | Sudah diperbaiki: GIF di-encode lewat `sharp` (animasi). Kalau masih diam, pastikan `npm install` sudah dijalankan setelah update (`node -e "import('sharp').then(()=>console.log('sharp OK'))"`). |
+| Video ditolak | Batas durasi stiker video 10 detik (`MAX_STICKER_SECONDS`), dan stiker **video** (mp4) memang wajib ffmpeg — GIF tidak. |
 | Stiker jadi tapi tanpa nama pack | `node-webpmux` gagal menyisipkan EXIF — biasanya karena file masukan bukan WebP valid. Coba kirim ulang gambarnya. |
 | Mau cek cepat | `npm run check:sticker` (uji gambar→webp→EXIF, video→webp animasi, dan jalur plugin `.sticker`). |
 
@@ -769,9 +965,11 @@ pm2 save && pm2 startup
 ## 🧪 Testing
 
 ```bash
-npm run check     # node --check untuk semua file .js
-npm test          # node:test (database, plugin, handler, health, media)
-npm run smoke     # boot tanpa WhatsApp + cek plugin & tool
+npm run check       # node --check untuk semua file .js
+npm test            # node:test (database, plugin, handler, health, media)
+npm run smoke       # boot tanpa WhatsApp + cek plugin & tool
+npm run check:image # uji pipeline .sfw (+ --nsfw) dengan API asli
+npm run check:nsfw  # cek provider API NSFW dari IP server (metadata saja)
 ```
 
 Tes mencakup: roundtrip database, deteksi command dobel, kontrak plugin, dispatch pesan end-to-end (dengan conn palsu), permission owner/limit, hook AFK, media ffmpeg (otomatis di-skip bila ffmpeg tidak ada), dan health server.

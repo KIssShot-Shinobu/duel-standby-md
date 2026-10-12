@@ -96,7 +96,7 @@ export default handler;`,
 
   await handleMessage(conn, msg('.crash'), { plugins, db, config, logger: quiet });
   const reply = sent.at(-1)?.content?.text || '';
-  assert.match(reply, /Terjadi kesalahan/);
+  assert.match(reply, /Ups, ada yang error di server/);
   assert.doesNotMatch(reply, /boom teknis/);
 
   // mode debug menampilkan detail

@@ -8,13 +8,16 @@
  *   .resetlimit 628xx              .ban 628xx [alasan]     .unban 628xx
  *
  * Target boleh: nomor (628xx / 08xx), mention (@628xx), atau cukup reply pesan user.
+ * Target ber-LID (`...@lid`) otomatis dipetakan ke record nomor telepon lewat
+ * `db.resolveLid` supaya premium/limit tidak masuk ke record yang berbeda.
  * Tambahan limit dari owner disimpan sebagai "bonus" sehingga tidak hilang
  * saat reset limit harian (lihat lib/permissions.js -> adjustLimit).
  */
-import { toJid, bareNumber, cleanJid, isJidUser } from '../lib/functions.js';
+import { bareNumber, isJidUser, resolveUserTarget } from '../lib/functions.js';
 import { adjustLimit, limitBase, refreshLimit } from '../lib/permissions.js';
 
-const NUMBER_ARG = /^@?\+?\d{7,20}$/;
+/** Alias lama: resolusi target user (nomor, mention, atau reply). */
+export const resolveTarget = resolveUserTarget;
 
 const HELP = (config) => {
   const p = config.bot.prefix[0];
@@ -35,32 +38,18 @@ const HELP = (config) => {
 
 /**
  * Tentukan target dari argumen, mention, atau pesan yang di-reply.
- * `args` harus SUDAH tanpa kata kunci aksi (add/del) bila ada.
- * @returns {{jid: string, rest: string[]}} `rest` = argumen setelah target
+ * Implementasinya ada di lib/functions.js -> `resolveUserTarget`.
  */
-export function resolveTarget(m, args = [], { shorthand = true } = {}) {
-  const raw = String(args[0] ?? '').trim();
-
-  // nomor polos / mention / jid lengkap
-  if (raw && NUMBER_ARG.test(raw)) return { jid: toJid(raw), rest: args.slice(1) };
-  if (raw && raw.includes('@') && isJidUser(cleanJid(raw))) return { jid: cleanJid(raw), rest: args.slice(1) };
-
-  // tanpa nomor: pakai mention atau pengirim pesan yang di-reply
-  const source = (m?.mentionedJid || [])[0] || m?.quoted?.sender || '';
-  if (source) {
-    // ".premium add 30" / ".limit add 10" saat reply -> angka itu jadi parameter
-    const rest = shorthand && /^\d{1,4}$/.test(raw) ? [raw, ...args.slice(1)] : args.slice(1);
-    return { jid: cleanJid(source), rest };
-  }
-  return { jid: '', rest: [] };
-}
 
 const handler = async (m, { args, command, config, db }) => {
   const action = String(args[0] || '').toLowerCase();
   // `.premium add <target> ...` / `.limit add <target> ...` punya kata kunci aksi dulu,
   // sedangkan `.ban <target>`, `.unban <target>`, `.resetlimit <target>` tidak.
   const withAction = /^(premium|limit)$/i.test(command);
-  const { jid: target, rest } = resolveTarget(m, withAction ? args.slice(1) : args, { shorthand: withAction });
+  const { jid: rawTarget, rest } = resolveTarget(m, withAction ? args.slice(1) : args, { shorthand: withAction });
+  // Target bisa berupa LID (WhatsApp baru). Arahkan ke record nomor teleponnya
+  // supaya premium/limit tidak masuk ke record LID yang berbeda.
+  const target = rawTarget ? db.resolveLid?.(rawTarget) || rawTarget : rawTarget;
 
   if (!target || !isJidUser(target)) {
     return m.reply(HELP(config));
@@ -81,7 +70,10 @@ const handler = async (m, { args, command, config, db }) => {
     return m.reply(
       [
         `✅ Limit ${bareNumber(target)} sekarang *${result.limit}*`,
+        `📊 kuota harian (setelah reset): *${result.quota}*`,
         result.bonus ? `➕ bonus owner: *+${result.bonus}* (tidak hilang saat reset harian)` : '',
+        '',
+        `_Cek dari sisi user: \`${config.bot.prefix[0]}profile ${bareNumber(target)}\`_`,
       ]
         .filter(Boolean)
         .join('\n'),
@@ -96,8 +88,12 @@ const handler = async (m, { args, command, config, db }) => {
 
     if (action === 'add') {
       const days = Number(rest[0]) > 0 ? Number(rest[0]) : config.limits.premiumDays;
+      // Kalau premium masih aktif, tambahkan harinya dari sisa masa aktif —
+      // bukan menimpanya (dulu `.premium add 30` memotong sisa hari yang ada).
+      const stillActive = Number(user.premiumUntil) > Date.now();
+      const startFrom = stillActive ? Number(user.premiumUntil) : Date.now();
       user.premium = true;
-      user.premiumUntil = Date.now() + days * 86400000;
+      user.premiumUntil = startFrom + days * 86400000;
       // kuota limit langsung menyesuaikan status premium
       if (!user.lastLimitReset) user.lastLimitReset = Date.now();
       user.limit = limitBase(user, config) + bonus();
@@ -105,7 +101,7 @@ const handler = async (m, { args, command, config, db }) => {
       await db.save?.(true);
       return m.reply(
         [
-          `✅ ${bareNumber(target)} sekarang *premium* selama ${days} hari.`,
+          `✅ ${bareNumber(target)} ${stillActive ? `premium *diperpanjang ${days} hari*` : `sekarang *premium* selama ${days} hari`}.`,
           `📅 berakhir: ${new Date(user.premiumUntil).toLocaleString('id-ID', { timeZone: config.bot.timezone })}`,
           `💳 kuota limit: *${user.limit}*`,
         ].join('\n'),

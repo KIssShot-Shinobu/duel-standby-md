@@ -11,6 +11,7 @@
 import ytsearch from 'yt-search';
 import { hasFfmpeg, hasYtDlp, toAudio, ytDlpDownload, ytDlpInfo, ytDlpInstallHint } from '../lib/media.js';
 import { formatBytes, isUrl, safeFileName, shortClock } from '../lib/functions.js';
+import { ok, err, joinLines, thinking, resultText } from '../lib/messages.js';
 
 const AUDIO_MIME = {
   mp3: 'audio/mpeg',
@@ -52,14 +53,13 @@ export async function resolveVideo(input, config) {
 }
 
 const handler = async (m, { conn, text, config, usedPrefix, wait }) => {
-  if (!text) return m.reply(`Contoh: ${usedPrefix}ytmp3 https://youtu.be/xxxx`);
+  if (!text) return m.reply(err(`Contoh: ${usedPrefix}ytmp3 https://youtu.be/xxxx`, m));
 
   if (!hasYtDlp(config.ytdlp.path)) {
     return m.reply(ytDlpInstallHint(config));
   }
 
-  // wait() mengirim pesan tunggu dan mengembalikan fungsi untuk mengeditnya.
-  const update = await wait();
+  const update = await wait(thinking());
   const video = await resolveVideo(text, config);
 
   const raw = await ytDlpDownload(video.url, {
@@ -83,7 +83,7 @@ const handler = async (m, { conn, text, config, usedPrefix, wait }) => {
   }
 
   if (buffer.length > config.media.maxUploadBytes) {
-    throw new Error(`File terlalu besar (${formatBytes(buffer.length)}) untuk dikirim WhatsApp.`);
+    throw new Error(`File terlalu besar (${formatBytes(buffer.length)}) buat dikirim WhatsApp.`);
   }
 
   await conn.sendAudio(m.chat, buffer, {
@@ -92,14 +92,12 @@ const handler = async (m, { conn, text, config, usedPrefix, wait }) => {
     target: m,
   });
 
-  const summary = [
-    `🎵 *${video.title || 'audio'}*`,
-    video.duration ? `⏱️ ${shortClock(video.duration * 1000)}` : null,
-    `📦 ${formatBytes(buffer.length)} • ${ext.toUpperCase()}${converted ? ' (dikonversi dari ' + audioExtension(raw) + ')' : ''}`,
-    !converted && ext !== 'mp3' ? '_ffmpeg tidak terdeteksi, file dikirim apa adanya._' : null,
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const summary = resultText(video.title || 'Audio', {
+    duration: video.duration ? shortClock(video.duration * 1000) : null,
+    size: formatBytes(buffer.length),
+    format: ext.toUpperCase() + (converted ? ` (dikonversi dari ${audioExtension(raw)})` : ''),
+    note: !converted && ext !== 'mp3' ? 'ffmpeg gak ada, file dikirim apa adanya.' : null,
+  });
 
   if (typeof update === 'function') await update(summary);
   else await m.reply(summary);

@@ -11,3 +11,6 @@ Thumbs.db
 # patch hasil generate (berisi salinan file; tidak perlu masuk repo)
 patch-*.mjs
 backup-patch-*/
+
+# worktree directory
+.worktrees/

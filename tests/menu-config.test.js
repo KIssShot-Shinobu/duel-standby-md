@@ -52,16 +52,19 @@ const makeConn = () => {
 
 // ── Pengaturan dasar ───────────────────────────────────────────────────────
 
-test('kategori nsfw disiapkan kosong: tampil tapi belum aktif', () => {
+test('kategori nsfw: tampil & menyala sebagai master switch (konten tetap opt-in per grup)', () => {
   const db = makeDb();
   const menu = ensureMenuSettings(db);
 
   assert.ok(KNOWN_CATEGORIES.nsfw, 'nsfw tidak terdaftar di KNOWN_CATEGORIES');
-  assert.equal(KNOWN_CATEGORIES.nsfw.empty, true);
-  assert.equal(menu.categories.nsfw.visible, true, 'nsfw default tampil (placeholder)');
-  assert.equal(menu.categories.nsfw.enabled, false, 'nsfw default belum aktif');
+  assert.equal(KNOWN_CATEGORIES.nsfw.adult, true, 'nsfw harus ditandai kategori dewasa');
+  assert.equal(menu.categories.nsfw.visible, true, 'nsfw default tampil');
+  assert.equal(menu.categories.nsfw.enabled, true, 'master switch nyala; gambar tetap opt-in per grup');
 
-  assert.deepEqual(categoryState(db, 'nsfw'), { visible: true, enabled: false });
+  assert.deepEqual(categoryState(db, 'nsfw'), { visible: true, enabled: true });
+  // owner tetap bisa mematikan seluruh fitur
+  setCategory(db, 'nsfw', { enabled: false });
+  assert.equal(categoryState(db, 'nsfw').enabled, false);
   // kategori lain default tampil & aktif
   assert.deepEqual(categoryState(db, 'game'), { visible: true, enabled: true });
   db.close();
@@ -124,7 +127,7 @@ export default handler;`,
   setCommand(db, 'x-halo.js', { enabled: false });
   const blocked = await handleMessage(conn, message('.halo'), { plugins, db, config, logger: quiet });
   assert.equal(blocked.reason, 'disabled');
-  assert.match(sent.at(-1).content.text, /dimatikan oleh owner/i);
+  assert.match(sent.at(-1).content.text, /dimatikan sama owner/i);
 
   // dimatikan lewat kategori
   setCommand(db, 'x-halo.js', { enabled: true });
@@ -134,22 +137,32 @@ export default handler;`,
   db.close();
 });
 
-test('kategori nsfw yang belum aktif diabaikan tanpa pesan', async () => {
+test('kategori nsfw yang dimatikan owner diabaikan tanpa pesan (kecuali plugin adultExempt)', async () => {
   const db = makeDb();
   const { conn, sent } = makeConn();
   const plugins = await setupPlugins({
     'nsfw-test.js': `const handler = async (m) => m.reply('konten dewasa');
 handler.help = ['nsfwtest']; handler.tags = ['nsfw']; handler.command = /^(nsfwtest)$/i;
 export default handler;`,
+    'nsfw-toggle.js': `const handler = async (m) => m.reply('toggle jalan');
+handler.help = ['nsfwtoggle']; handler.tags = ['nsfw']; handler.command = /^(nsfwtoggle)$/i;
+handler.adultExempt = true;
+export default handler;`,
   });
 
-  // default: kategori nsfw ada tapi enabled=false -> diabaikan diam-diam
+  // master switch dimatikan owner -> command dewasa diabaikan diam-diam
+  setCategory(db, 'nsfw', { enabled: false });
   const before = sent.length;
   const silent = await handleMessage(conn, message('.nsfwtest'), { plugins, db, config, logger: quiet });
   assert.equal(silent.reason, 'adult-disabled');
   assert.equal(sent.length, before, 'tidak boleh ada balasan untuk kategori dewasa yang tertutup');
 
-  // setelah owner mengaktifkan -> jalan
+  // plugin bertanda adultExempt tetap dijawab (mis. toggle per grup)
+  const exempt = await handleMessage(conn, message('.nsfwtoggle'), { plugins, db, config, logger: quiet });
+  assert.equal(exempt.handled, true, 'plugin adultExempt harus tetap dijalankan');
+  assert.match(sent.at(-1).content.text, /toggle jalan/);
+
+  // setelah owner mengaktifkan -> command biasa jalan
   setCategory(db, 'nsfw', { enabled: true });
   const active = await handleMessage(conn, message('.nsfwtest'), { plugins, db, config, logger: quiet });
   assert.equal(active.handled, true);
@@ -181,16 +194,23 @@ const menuCtx = (db, plugins) => {
 
 const lastText = (ctx) => ctx.sent.at(-1)?.content?.text || '';
 
-test('.menu menampilkan kategori nsfw kosong dan menyembunyikan command yang di-hide', async () => {
+test('.menu menampilkan kategori nsfw + command, dan menyembunyikan yang di-hide', async () => {
   const db = makeDb();
   const plugins = await loadRealPlugins();
   const ctx = menuCtx(db, plugins);
 
   await menuPlugin(ctx.m, ctx);
   const awal = lastText(ctx);
-  assert.match(awal, /NSFW \(18\+\)/, 'kategori nsfw harus tampil (placeholder)');
-  assert.match(awal, /belum ada command/);
+  assert.match(awal, /NSFW \(18\+\)/, 'kategori nsfw harus tampil');
+  assert.match(awal, /\.nsfw/, 'command .nsfw tampil (kategori tetap mati sampai diaktifkan)');
   assert.match(awal, /\.smeme/, 'smeme tampil secara default');
+
+  // sembunyikan command nsfw -> kategori tetap tampil, isinya kosong
+  setCommand(db, 'nsfw-image.js', { visible: false });
+  await menuPlugin(ctx.m, ctx);
+  assert.doesNotMatch(lastText(ctx), /\.nsfw/, 'command .nsfw harus hilang dari menu');
+  assert.match(lastText(ctx), /Belum ada command di sini/, 'kategori kosong tetap tampil dengan keterangan');
+  setCommand(db, 'nsfw-image.js', { visible: true });
 
   // sembunyikan command smeme
   setCommand(db, 'sticker-smeme.js', { visible: false });
@@ -216,6 +236,7 @@ test('.menuset menampilkan status kategori & cara mengubahnya', async () => {
   const ctx = menuCtx(db, plugins);
   ctx.args = [];
   ctx.command = 'menuset';
+  setCategory(db, 'nsfw', { enabled: false }); // supaya ada kategori yang dimatikan untuk ditampilkan
 
   await ownerMenuPlugin(ctx.m, ctx);
   const body = lastText(ctx);

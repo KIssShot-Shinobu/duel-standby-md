@@ -1,6 +1,6 @@
 # Daftar Command
 
-> Dibuat otomatis oleh `npm run commands -- --markdown` — 46 plugin, 92 command.
+> Dibuat otomatis oleh `npm run commands -- --markdown` — 49 plugin, 99 command.
 > Prefix default: `.` (lihat `PREFIX` di `.env`).
 
 ## ai
@@ -32,6 +32,7 @@
 | `.card` | 1 limit | `game-yugioh-art.js` |
 | `.banlist` | 1 limit | `game-yugioh-banlist.js` |
 | `.tebakygo`, `.nyerah`, `.stoptebak`, `.yugoscore` | — | `game-yugioh-guess.js` |
+| `.tebakgambar`, `.hint` | — | `game-yugioh-image.js` |
 | `.ygorandom`, `.randomcard` | 1 limit | `game-yugioh-random.js` |
 | `.ygosearch`, `.ygofind` | 1 limit | `game-yugioh-search.js` |
 | `.cardset`, `.setcode`, `.cardsets` | 1 limit | `game-yugioh-set.js` |
@@ -50,6 +51,12 @@
 | `.setname` | admin grup, bot harus admin, hanya grup | `group-setname.js` |
 | `.tagall`, `.hidetag` | admin grup, hanya grup | `group-tagall.js` |
 
+## image
+
+| Command | Keterangan syarat | File |
+|---|---|---|
+| `.sfw`, `.sfwlist` | 1 limit | `sfw-image.js` |
+
 ## info
 
 | Command | Keterangan syarat | File |
@@ -63,6 +70,12 @@
 | `.info`, `.profile`, `.profil`, `.daftar` | — | `main-info.js` |
 | `.menu`, `.help`, `.bantuan` | — | `main-menu.js` |
 | `.ping`, `.speed` | — | `main-ping.js` |
+
+## nsfw
+
+| Command | Keterangan syarat | File |
+|---|---|---|
+| `.nsfw`, `.nsfwstatus`, `.nsfwlist` | 1 limit | `nsfw-image.js` |
 
 ## owner
 

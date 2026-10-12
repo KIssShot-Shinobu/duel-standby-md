@@ -12,48 +12,8 @@
  * nama kartu tidak terlihat. Jawaban berupa huruf (A/B/C/D) atau nama kartu
  * (toleran salah ketik).
  */
-import { getClient } from '../lib/ygoprodeck.js';
-import { YgoQuiz } from '../lib/yugioh-quiz.js';
+import { ensureQuiz } from '../lib/quiz-instance.js';
 import { consumeLimit } from '../lib/permissions.js';
-
-let quiz = null;
-let activeConn = null;
-
-function buildOptions(config) {
-  const options = config.game?.yugioh || {};
-  return {
-    rounds: options.rounds,
-    mode: options.mode,
-    timeoutMs: options.timeoutMs,
-    hintDelayMs: options.hintDelayMs,
-    maxAttempts: options.maxAttempts,
-    choiceAttempts: options.choiceAttempts,
-    roundDelayMs: options.roundDelayMs,
-    reward: { saldo: options.rewardSaldo, exp: options.rewardExp, limit: options.rewardLimit },
-  };
-}
-
-/** Satu engine per proses; socket aktif diperbarui setiap pesan masuk. */
-function ensureQuiz(conn, config, db) {
-  if (conn) activeConn = conn;
-  if (!quiz) {
-    quiz = new YgoQuiz({
-      client: getClient(config),
-      options: buildOptions(config),
-      db,
-      send: async (chat, content) => {
-        if (!activeConn) return null;
-        if (content.image) {
-          return activeConn.sendMessage(chat, { image: content.image, caption: content.caption || '' });
-        }
-        return activeConn.sendMessage(chat, { text: content.text || '', mentions: content.mentions || [] });
-      },
-    });
-  } else if (db) {
-    quiz.db = db;
-  }
-  return quiz;
-}
 
 const handler = async (m, { conn, args, config, db, user, isAdmin, isOwner, command, usedPrefix }) => {
   const engine = ensureQuiz(conn, config, db);

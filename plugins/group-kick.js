@@ -2,27 +2,30 @@
  * Keluarkan anggota dari grup.
  *   .kick @user / reply / .kick 628xxxx
  */
-import { getTargets, bareNumber } from '../lib/functions.js';
+import { getTargets } from '../lib/functions.js';
 import { isParticipantAdmin } from '../lib/permissions.js';
+import { friendlyNumber, joinLines } from '../lib/messages.js';
 
 const handler = async (m, { conn, args, config, groupMetadata }) => {
   const targets = getTargets(m, args).filter((jid) => jid !== conn.user?.id);
-  if (!targets.length) return m.reply(`Tag/reply atau tulis nomor.\nContoh: ${config.bot.prefix[0]}kick 628xxxxxxxxxx`);
+  if (!targets.length) {
+    return m.reply(`Tag/reply atau tulis nomornya.\nContoh: ${config.bot.prefix[0]}kick 628xxxxxxxxxx`);
+  }
 
   const results = [];
   for (const jid of targets) {
     if (isParticipantAdmin(groupMetadata, jid)) {
-      results.push(`⚠️ ${bareNumber(jid)} adalah admin, dilewati`);
+      results.push(`${friendlyNumber(jid)} admin, jadi dilewatin aja.`);
       continue;
     }
     try {
       await conn.groupParticipantsUpdate(m.chat, [jid], 'remove');
-      results.push(`✅ ${bareNumber(jid)} dikeluarkan`);
-    } catch (err) {
-      results.push(`❌ ${bareNumber(jid)} -> ${err.message}`);
+      results.push(`${friendlyNumber(jid)} udah dikeluarkan.`);
+    } catch (e) {
+      results.push(`${friendlyNumber(jid)} gagal: ${e.message}`);
     }
   }
-  return m.reply(`*「 KICK 」*\n\n${results.join('\n')}`);
+  return m.reply(joinLines(`*Kick selesai*\n\n${results.join('\n')}`));
 };
 
 handler.help = ['kick'];
