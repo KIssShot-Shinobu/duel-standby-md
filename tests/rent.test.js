@@ -164,6 +164,7 @@ test('sweepRentals: tandai expired sekali, reminder H-3 & H-1 sekali', () => {
 test('parseGroupInput: link / id / nama / null', () => {
   assert.deepEqual(Rent.parseGroupInput('https://chat.whatsapp.com/AbC123'), { kind: 'link', value: 'AbC123' });
   assert.deepEqual(Rent.parseGroupInput('120363046825098789'), { kind: 'id', value: '120363046825098789' });
+  assert.deepEqual(Rent.parseGroupInput('6289670762522-1614085129@g.us'), { kind: 'id', value: '6289670762522-1614085129@g.us' });
   assert.deepEqual(Rent.parseGroupInput('grup pelarian doi'), { kind: 'name', value: 'grup pelarian doi' });
   assert.equal(Rent.parseGroupInput('   '), null);
 });
@@ -179,6 +180,7 @@ test('resolveGroupJid: link valid/batal, id, nama, tidak ketemu', async () => {
   assert.deepEqual(await Rent.resolveGroupJid(conn, 'https://chat.whatsapp.com/GOOD'), { jid: '123@g.us', subject: 'Grup Uji' });
   assert.equal(await Rent.resolveGroupJid(conn, 'https://chat.whatsapp.com/BAD'), null);
   assert.deepEqual(await Rent.resolveGroupJid(conn, '120363046825098789'), { jid: '120363046825098789@g.us', subject: undefined });
+  assert.deepEqual(await Rent.resolveGroupJid(conn, '6289670762522-1614085129@g.us'), { jid: '6289670762522-1614085129@g.us', subject: undefined });
   assert.deepEqual(await Rent.resolveGroupJid(conn, 'pelarian'), { jid: '123@g.us', subject: 'Grup Pelarian Doi' });
   assert.equal(await Rent.resolveGroupJid(conn, 'tidak ada grup ini'), null);
   assert.equal(await Rent.resolveGroupJid(conn, ''), null);

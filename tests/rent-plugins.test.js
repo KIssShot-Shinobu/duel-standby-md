@@ -106,6 +106,24 @@ test('owner .rent approve <id> [hari]: sewa aktif', async () => {
   t.db.close();
 });
 
+test('non-owner .rent add <grup>: ditolak "Khusus owner", bukan gagal cari grup', async () => {
+  const t = await setup({ owners: ['6289999999999'] });
+  const r = await handleMessage(t.conn, dmMsg(`.rent add ${ID}`), { plugins: t.plugins, db: t.db, config: t.config, logger: quiet });
+  assert.equal(r.reason, 'user-error');
+  assert.match(reply(t.sent, '628111@s.whatsapp.net'), /Khusus owner/i);
+  assert.equal(Rent.getRental(t.db, GROUP), null, 'tidak boleh ada rental dibuat oleh non-owner');
+  t.db.close();
+});
+
+test('owner .rent add <jid @g.us>: aktif meski pakai JID eksplisit', async () => {
+  const t = await setup({ owners: ['628111'] });
+  const jid = '6289670762522-1614085129@g.us';
+  const r = await handleMessage(t.conn, dmMsg(`.rent add ${jid} 30`, '628111@s.whatsapp.net'), { plugins: t.plugins, db: t.db, config: t.config, logger: quiet });
+  assert.equal(r.handled, true);
+  assert.equal(Rent.rentalStatus(t.db, jid), 'active');
+  t.db.close();
+});
+
 test('.grouplist (owner): daftar grup + status; non-owner ditolak', async () => {
   const owner = await setup({ owners: ['628111'] });
   await Rent.activateRent(owner.db, GROUP, { renter: '628111@s.whatsapp.net', renterName: 'T', days: 30, by: 'owner', now: Date.now() });

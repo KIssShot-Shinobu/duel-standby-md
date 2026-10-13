@@ -117,7 +117,10 @@ const handler = async (m, ctx) => {
     // ── .rent / .sewa ─────────────────────────────────────────────────────
     if (command === 'rent' || command === 'sewa') {
       const sub = (args[0] || '').toLowerCase();
-      if (isOwner && OWNER_SUBS.includes(sub)) return handleOwner(m, ctx, sub, args);
+      if (OWNER_SUBS.includes(sub)) {
+        if (!isOwner) throw userError('Khusus owner.');
+        return handleOwner(m, ctx, sub, args);
+      }
 
       const s = Rent.rentSettings(db, config);
       const price = s.pricePerMonth ? `Rp${s.pricePerMonth.toLocaleString('id-ID')} / bulan` : '(harga diumumkan owner)';
