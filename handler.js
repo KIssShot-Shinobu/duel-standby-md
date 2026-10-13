@@ -138,9 +138,42 @@ export async function handleMessage(conn, raw, deps) {
   const isGroup = m.isGroup;
   let groupMetadata = null;
   let participants = [];
-  if (isGroup && groupCache && conn.groupMetadata) {
-    groupMetadata = await groupCache.get(conn, m.chat).catch(() => null);
+  if (isGroup && conn.groupMetadata) {
+    // Cache kelompok mempercepat pengambilan metadata, tapi petakan LID <-> nomor
+    // tidak boleh bergantung padanya: kalau cache belum siap / gagal inisialisasi,
+    // identitas peserta grup tetap harus bisa diambil langsung dari socket.
+    groupMetadata = groupCache
+      ? await groupCache.get(conn, m.chat).catch(() => null)
+      : await conn.groupMetadata(m.chat).catch(() => null);
     participants = groupMetadata?.participants || [];
+  }
+
+  // Pesan grup sering hanya menyertakan `participant` = LID (tanpa
+  // `participantPn`/`participantAlt`), jadi nomor teleponnya tidak ada di pesan
+  // dan `db.mapLid()` di atas tidak punya pasangan untuk disimpan. Yang tersisa
+  // adalah daftar peserta grup (`{ lid, phoneNumber }`) — petakan dari sana
+  // supaya user tidak punya record LID terpisah dari record yang diedit owner
+  // lewat `.premium add <nomor>` / `.limit add`.
+  if (m.senderLid && !m.senderPn && participants.length) {
+    const pn = Perm.findParticipantPhone(groupMetadata, m.senderLid);
+    if (pn && db.mapLid(m.senderLid, pn)) {
+      m.senderPn = pn;
+      if (String(m.sender).endsWith('@lid')) {
+        m.senderAlt = m.senderAlt === m.sender ? pn : m.senderAlt;
+        m.sender = pn;
+      }
+    }
+  }
+
+  // Kalau identitasnya masih LID sampai sini, nomor teleponnya memang tidak
+  // tersedia di pesan maupun di daftar peserta grup. User ini akan punya record
+  // sendiri sehingga premium/limit dari owner tidak terbaca — dicatat supaya
+  // ketahuan dari log, bukan hanya dari gejala "limitnya kok tidak berubah".
+  if (m.senderLid && !m.senderPn && String(m.sender).endsWith('@lid')) {
+    logger.warn?.(
+      `[handler] pengirim ${m.senderLid} tidak punya nomor telepon yang bisa dipetakan ` +
+        `(grup ${m.chat}) — cek isi participants dari groupMetadata`,
+    );
   }
 
   const isOwner = Perm.isOwner(m.sender, config);

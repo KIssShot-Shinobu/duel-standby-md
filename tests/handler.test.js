@@ -189,6 +189,45 @@ test('pesan ber-LID dengan participantAlt: premium/limit nomor telepon tetap ter
   db.close();
 });
 
+test('chat grup: identitas dari daftar peserta (lid+phoneNumber) dipakai', async () => {
+  // Di grup, WA sering mengirim `key.participant` = LID saja tanpa participantPn
+  // maupun participantAlt, jadi nomor teleponnya tidak ada di pesan. Yang
+  // satu-satunya sumber pasangan LID <-> nomor adalah daftar peserta grup
+  // (`{ lid, phoneNumber }`). Kalau itu tidak dipakai untuk memetakan LID,
+  // user tetap punya record terpisah dari record yang diedit owner.
+  const { db, plugins, conn, sent } = await setup();
+  const lid = '271446714642565@lid';
+  const pn = '628111222333@s.whatsapp.net';
+
+  const granted = db.user(pn);
+  granted.premium = true;
+  granted.premiumUntil = Date.now() + 30 * 86400000;
+  granted.limitBonus = 10;
+  granted.limit = config.limits.premium + 10;
+
+  conn.groupMetadata = async () => ({
+    subject: 'Grup Uji',
+    participants: [{ id: lid, lid, phoneNumber: pn, admin: null }],
+  });
+
+  const raw = {
+    key: { remoteJid: '123@g.us', fromMe: false, id: 'LIDGRP1', participant: lid },
+    message: { conversation: '.profile' },
+    messageTimestamp: Math.floor(Date.now() / 1000),
+    pushName: 'LID User',
+  };
+  const result = await handleMessage(conn, raw, { plugins, db, config, logger: quiet });
+  assert.equal(result.handled, true);
+
+  assert.equal(db.data.users[lid], undefined, 'tidak boleh ada record LID terpisah');
+  assert.equal(db.data.lidMap[lid], pn, 'pemetaan harus diambil dari daftar peserta grup');
+
+  const body = sent.map((item) => item.content?.text || '').join('\n');
+  assert.match(body, /Premium: Ya/, 'premium yang diberikan owner harus terlihat di .profile');
+  assert.match(body, new RegExp(`Limit: ${config.limits.premium + 10}/`));
+  db.close();
+});
+
 test('chat pribadi ber-LID: premium/limit nomor telepon tetap terpakai', async () => {
   // Regresi: di chat pribadi WA baru, `key.remoteJid` = nomor telepon dan
   // `key.remoteJidAlt` = LID. Kalau hanya remoteJidAlt yang dipakai untuk
