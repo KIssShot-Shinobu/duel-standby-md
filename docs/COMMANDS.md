@@ -1,6 +1,6 @@
 # Daftar Command
 
-> Dibuat otomatis oleh `npm run commands -- --markdown` — 49 plugin, 99 command.
+> Dibuat otomatis oleh `npm run commands -- --markdown` — 57 plugin, 173 command.
 > Prefix default: `.` (lihat `PREFIX` di `.env`).
 
 ## ai
@@ -8,6 +8,15 @@
 | Command | Keterangan syarat | File |
 |---|---|---|
 | `.ai`, `.chatgpt`, `.resetai` | 1 limit | `ai-chat.js` |
+
+## anime
+
+| Command | Keterangan syarat | File |
+|---|---|---|
+| `.anime`, `.animeinfo`, `.eps`, `.themes`, `.streaming`, `.recs`, `.reviews`, `.chars`, `.staff`, `.relations` | 1 limit | `jikan-anime.js` |
+| `.char`, `.charinfo`, `.charanime`, `.charva`, `.va`, `.vainfo`, `.vaanime` | 1 limit | `jikan-char.js` |
+| `.manga`, `.mangainfo`, `.mangachars`, `.mangarecs`, `.mangareviews` | 1 limit | `jikan-manga.js` |
+| `.seasonal`, `.jadwal`, `.topmal`, `.random`, `.maluser`, `.animelist`, `.mangalist`, `.malfav`, `.malstats` | 1 limit | `jikan.js` |
 
 ## downloader
 
@@ -23,14 +32,17 @@
 | Command | Keterangan syarat | File |
 |---|---|---|
 | `.quote`, `.quotes` | — | `fun-quote.js` |
+| `.kick`, `.hug`, `.kiss`, `.slap`, `.pat`, `.cuddle`, `.poke`, `.tickle`, `.highfive`, `.bite`, `.bonk`, `.feed`, `.wave`, `.blush`, `.smile`, `.wink`, `.stare`, `.facepalm`, `.yeet`, `.carry`, `.tendang`, `.peluk`, `.cium`, `.tampar`, `.sayang`, `.peluk2`, `.colok`, `.gelitik`, `.high5`, `.gigit`, `.lempar`, `.angkat`, `.reactionlist` | 1 limit | `reaction-gif.js` |
 
 ## game
 
 | Command | Keterangan syarat | File |
 |---|---|---|
 | `.archetype`, `.archetypes` | 1 limit | `game-yugioh-archetype.js` |
+| `.art`, `.artwork`, `.artall` | 1 limit | `game-yugioh-art-select.js` |
 | `.card` | 1 limit | `game-yugioh-art.js` |
 | `.banlist` | 1 limit | `game-yugioh-banlist.js` |
+| `.effect`, `.ef`, `.e` | 1 limit | `game-yugioh-effect.js` |
 | `.tebakygo`, `.nyerah`, `.stoptebak`, `.yugoscore` | — | `game-yugioh-guess.js` |
 | `.tebakgambar`, `.hint` | — | `game-yugioh-image.js` |
 | `.ygorandom`, `.randomcard` | 1 limit | `game-yugioh-random.js` |
@@ -44,7 +56,7 @@
 |---|---|---|
 | `.add` | admin grup, bot harus admin, hanya grup | `group-add.js` |
 | `.antilink`, `.antispam`, `.welcome`, `.detect` | admin grup, hanya grup | `group-config.js` |
-| `.kick` | admin grup, bot harus admin, hanya grup | `group-kick.js` |
+| `.gkick`, `.groupkick`, `.keluarkan` | admin grup, bot harus admin, hanya grup | `group-kick.js` |
 | `.link` | admin grup, bot harus admin, hanya grup | `group-link.js` |
 | `.open`, `.close` | admin grup, bot harus admin, hanya grup | `group-open.js` |
 | `.promote`, `.demote` | admin grup, bot harus admin, hanya grup | `group-promote.js` |
@@ -100,6 +112,7 @@
 
 | Command | Keterangan syarat | File |
 |---|---|---|
+| `.buylimit`, `.limitbeli` | — | `buy-limit.js` |
 | `.smeme`, `.stikermeme` | 1 limit | `sticker-smeme.js` |
 | `.calc`, `.kalkulator` | — | `tools-calc.js` |
 | `.qr`, `.qrcode` | — | `tools-qr.js` |

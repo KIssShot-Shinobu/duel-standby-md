@@ -58,13 +58,13 @@ test('plugin .kick melewati admin grup dan tetap membalas', async () => {
   assert.equal(calls.length, 0, 'admin tidak boleh dikeluarkan');
 });
 
-test('plugin .kick tanpa target memberi contoh pemakaian', async () => {
+test('plugin .gkick tanpa target memberi contoh pemakaian', async () => {
   const { default: kick } = await import('../plugins/group-kick.js');
   const { conn, m, config, replies } = makeCtx();
 
   await kick(m, { conn, args: [], config, groupMetadata: { participants: [] } });
 
-  assert.match(replies[0], /Contoh: \.kick/);
+  assert.match(replies[0], /Contoh: \.gkick/);
   assert.doesNotMatch(replies[0], /\*\*/);
 });
 

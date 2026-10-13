@@ -8,7 +8,7 @@
  * Yang dikirim hanya pesan berisi gambar. Tidak ada pesan "tunggu", tidak ada
  * deskripsi/efek, tidak ada statistik, dan tidak di-quote ke pesanmu.
  */
-import { downloadCardImage, getClient } from '../lib/ygoprodeck.js';
+import { downloadCardImage, getClient, formatYgoError } from '../lib/ygoprodeck.js';
 
 /** Ambil angka artwork di akhir perintah: ".card dark magician 2" -> 2 */
 function splitArtIndex(text = '') {
@@ -47,7 +47,7 @@ const handler = async (m, { conn, text, config, usedPrefix, command }) => {
       }
     }
   } catch (err) {
-    return m.reply(`Gagal mengambil data kartu: ${err.message}`);
+    return m.reply(formatYgoError(err));
   }
 
   const buffer = await downloadCardImage(card, {

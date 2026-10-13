@@ -89,6 +89,39 @@ test('printMessage/printCommand memendekkan JID panjang', () => {
   );
 });
 
+test('nama grup dipakai di log kalau tersedia (bukan id)', () => {
+  const lines = captureOutput(() => {
+    print.printMessage({
+      chat: '6289670762522-1614085129@g.us',
+      sender: '62895623051780@s.whatsapp.net',
+      pushName: 'Reza Khaslana',
+      text: 'Siapa sangka',
+      isGroup: true,
+      groupName: 'Grup Pelarian Doi',
+    });
+    print.printCommand({ command: 'menu', sender: '62895623051780@s.whatsapp.net', chat: '6289670762522-1614085129@g.us', isGroup: true, groupName: 'Grup Pelarian Doi' });
+  });
+
+  assert.match(lines[0], /GRUP grup Grup Pelarian Doi ← Reza Khaslana \(62895623051780\) \[text\] Siapa sangka$/);
+  assert.match(lines[1], /GRUP grup Grup Pelarian Doi » \.menu oleh 62895623051780$/);
+  assert.doesNotMatch(lines.join('\n'), /1614085129/, 'id grup tidak boleh muncul kalau nama tersedia');
+});
+
+test('fallback ke id grup kalau nama tidak tersedia', () => {
+  const lines = captureOutput(() => {
+    print.printMessage({
+      chat: '12036@g.us',
+      sender: '628222@s.whatsapp.net',
+      pushName: 'Ani',
+      text: 'pagi',
+      isGroup: true,
+      groupName: '',
+    });
+  });
+
+  assert.match(lines[0], /GRUP grup 12036 ← Ani \(628222\) \[text\] pagi$/);
+});
+
 test('banner tidak lagi memakai border yang bisa miring', () => {
   const lines = captureOutput(() => print.banner('🜲 Bot Uji', 'v1.2.5', 'zona Asia/Jakarta'));
   assert.match(lines[0], /^─+$/);

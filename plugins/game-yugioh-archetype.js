@@ -3,7 +3,7 @@
  *   .archetype Blue-Eyes
  *   .archetypes              -> daftar semua archetype yang tersedia
  */
-import { getClient, formatCardLine } from '../lib/ygoprodeck.js';
+import { getClient, formatCardLine, formatYgoError } from '../lib/ygoprodeck.js';
 import { chunkText } from '../lib/functions.js';
 
 const MAX_RESULTS = 20;
@@ -18,7 +18,7 @@ const handler = async (m, { text, config, usedPrefix, command }) => {
     try {
       list = await ygo.archetypes();
     } catch (err) {
-      return m.reply(`❌ Gagal mengambil daftar archetype:\n${err.message}`);
+      return m.reply(formatYgoError(err));
     }
     const names = (list || []).map((item) => item.archetype_name || item.archetype).filter(Boolean);
     if (!names.length) return m.reply('❌ Daftar archetype kosong.');
@@ -32,7 +32,7 @@ const handler = async (m, { text, config, usedPrefix, command }) => {
   try {
     payload = await ygo.card({ archetype: name, num: String(MAX_RESULTS), sort: 'name' });
   } catch (err) {
-    return m.reply(`❌ Archetype *${name}* tidak ditemukan atau gagal diambil:\n${err.message}`);
+    return m.reply(formatYgoError(err));
   }
 
   const cards = payload.data || [];

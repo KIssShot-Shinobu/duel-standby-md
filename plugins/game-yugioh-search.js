@@ -9,7 +9,7 @@
  * attribute, link, linkmarker, scale, cardset, archetype, banlist, sort,
  * format, staple, misc, has_effect, startdate, enddate, dateregion, num, offset.
  */
-import { getClient, formatCardLine, parseSearchQuery } from '../lib/ygoprodeck.js';
+import { getClient, formatCardLine, parseSearchQuery, formatYgoError } from '../lib/ygoprodeck.js';
 
 const MAX_RESULTS = 15;
 
@@ -46,7 +46,7 @@ const handler = async (m, { text, config, usedPrefix, command }) => {
   try {
     payload = await ygo.card(requestParams);
   } catch (err) {
-    return m.reply(`❌ Pencarian gagal:\n${err.message}`);
+    return m.reply(formatYgoError(err));
   }
 
   const cards = payload.data || [];

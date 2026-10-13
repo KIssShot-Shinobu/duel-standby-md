@@ -105,7 +105,7 @@ function makeContext({ config = imageConfig(), nsfw = false, isGroup = true, isA
 
 // ── SFW ────────────────────────────────────────────────────────────────────
 
-test('plugin .sfw mengirim gambar aman dengan atribusi artist', async () => {
+test('plugin .sfw mengirim gambar aman tanpa caption', async () => {
   clearListCache();
   stubFetch({ 'nekos.best/api/v2': NEKOSBEST });
   const { default: sfwPlugin } = await import('../plugins/sfw-image.js');
@@ -114,8 +114,7 @@ test('plugin .sfw mengirim gambar aman dengan atribusi artist', async () => {
   await sfwPlugin(ctx.m, { ...ctx, text: 'neko', usedPrefix: '.', command: 'sfw' });
 
   assert.equal(ctx.sent.length, 1);
-  assert.match(ctx.sent[0].content.caption, /nekos\.best/);
-  assert.match(ctx.sent[0].content.caption, /Artist N/);
+  assert.equal(ctx.sent[0].content.caption, '');
   assert.doesNotMatch(ctx.sent[0].content.caption, /🔞/);
 });
 

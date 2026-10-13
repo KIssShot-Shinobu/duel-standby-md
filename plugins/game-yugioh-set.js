@@ -4,7 +4,7 @@
  *   .setcode SDY-046              -> info 1 kartu dari kode set
  *   .cardsets                     -> ringkasan semua set (jumlah + rilis terbaru)
  */
-import { getClient, formatCardLine } from '../lib/ygoprodeck.js';
+import { getClient, formatCardLine, formatYgoError } from '../lib/ygoprodeck.js';
 import { chunkText } from '../lib/functions.js';
 
 const MAX_RESULTS = 20;
@@ -20,7 +20,7 @@ const handler = async (m, { text, config, usedPrefix, command }) => {
     try {
       info = await ygo.setInfo(query.toUpperCase());
     } catch (err) {
-      return m.reply(`❌ Kode set *${query}* tidak ditemukan:\n${err.message}`);
+      return m.reply(formatYgoError(err));
     }
     const entry = Array.isArray(info) ? info[0] : info;
     if (!entry) return m.reply(`❌ Kode set *${query}* tidak ditemukan.`);
@@ -43,7 +43,7 @@ const handler = async (m, { text, config, usedPrefix, command }) => {
     try {
       sets = await ygo.sets();
     } catch (err) {
-      return m.reply(`❌ Gagal mengambil daftar set:\n${err.message}`);
+      return m.reply(formatYgoError(err));
     }
     const list = Array.isArray(sets) ? sets : [];
     const newest = [...list]
@@ -70,7 +70,7 @@ const handler = async (m, { text, config, usedPrefix, command }) => {
   try {
     payload = await ygo.card({ cardset: query, num: String(MAX_RESULTS), sort: 'name' });
   } catch (err) {
-    return m.reply(`❌ Set *${query}* tidak ditemukan:\n${err.message}`);
+    return m.reply(formatYgoError(err));
   }
 
   const cards = payload.data || [];

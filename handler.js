@@ -127,14 +127,8 @@ export async function handleMessage(conn, raw, deps) {
   const chat = db.chat(m.chat);
   chat.commandCount = chat.commandCount || 0;
 
-  // Mode nyimak: hanya log.
-  if (config.flags.nyimak) {
-    print.printMessage({ ...m, timeZone: config.bot.timezone });
-    return { handled: false, reason: 'nyimak' };
-  }
-
-  if (config.flags.autoread) m.read().catch(() => {});
-
+  // Metadata grup diambil lebih awal supaya log terminal bisa menampilkan NAMA
+  // grup (bukan id-nya), termasuk pada mode nyimak.
   const isGroup = m.isGroup;
   let groupMetadata = null;
   let participants = [];
@@ -147,6 +141,14 @@ export async function handleMessage(conn, raw, deps) {
       : await conn.groupMetadata(m.chat).catch(() => null);
     participants = groupMetadata?.participants || [];
   }
+
+  // Mode nyimak: hanya log.
+  if (config.flags.nyimak) {
+    print.printMessage({ ...m, groupName: groupMetadata?.subject, timeZone: config.bot.timezone });
+    return { handled: false, reason: 'nyimak' };
+  }
+
+  if (config.flags.autoread) m.read().catch(() => {});
 
   // Pesan grup sering hanya menyertakan `participant` = LID (tanpa
   // `participantPn`/`participantAlt`), jadi nomor teleponnya tidak ada di pesan
@@ -202,7 +204,7 @@ export async function handleMessage(conn, raw, deps) {
     }
   }
 
-  print.printMessage({ ...m, timeZone: config.bot.timezone });
+  print.printMessage({ ...m, groupName: groupMetadata?.subject, timeZone: config.bot.timezone });
   db.touch();
 
   // 1b) Hadiah tiap pesan: XP & saldo acak (config.rewards.chat)
@@ -325,7 +327,7 @@ export async function handleMessage(conn, raw, deps) {
   }
 
   // 5) Jalankan
-  print.printCommand({ command: ctx.command, sender: m.sender, chat: m.chat, isGroup, timeZone: config.bot.timezone });
+  print.printCommand({ command: ctx.command, sender: m.sender, chat: m.chat, isGroup, groupName: groupMetadata?.subject, timeZone: config.bot.timezone });
   chat.commandCount += 1;
   user.totalCommands = (user.totalCommands || 0) + 1;
   db.data.stats.commands = (db.data.stats.commands || 0) + 1;

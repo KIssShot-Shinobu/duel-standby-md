@@ -1,6 +1,7 @@
 /**
- * Keluarkan anggota dari grup.
- *   .kick @user / reply / .kick 628xxxx
+ * Keluarkan anggota dari grup (admin only).
+ *   .gkick @user / reply / .gkick 628xxxx
+ *   .groupkick @user / .keluarkan @user
  */
 import { getTargets } from '../lib/functions.js';
 import { isParticipantAdmin } from '../lib/permissions.js';
@@ -9,7 +10,7 @@ import { friendlyNumber, joinLines } from '../lib/messages.js';
 const handler = async (m, { conn, args, config, groupMetadata }) => {
   const targets = getTargets(m, args).filter((jid) => jid !== conn.user?.id);
   if (!targets.length) {
-    return m.reply(`Tag/reply atau tulis nomornya.\nContoh: ${config.bot.prefix[0]}kick 628xxxxxxxxxx`);
+    return m.reply(`Tag/reply atau tulis nomornya.\nContoh: ${config.bot.prefix[0]}gkick 628xxxxxxxxxx`);
   }
 
   const results = [];
@@ -28,9 +29,9 @@ const handler = async (m, { conn, args, config, groupMetadata }) => {
   return m.reply(joinLines(`*Kick selesai*\n\n${results.join('\n')}`));
 };
 
-handler.help = ['kick'];
+handler.help = ['gkick', 'groupkick', 'keluarkan'];
 handler.tags = ['group'];
-handler.command = /^(kick|keluarkan)$/i;
+handler.command = /^(gkick|groupkick|keluarkan)$/i;
 handler.group = true;
 handler.admin = true;
 handler.botAdmin = true;

@@ -10,7 +10,7 @@
  * PurrBot. Bisa diatur lewat env `IMAGE_PROVIDERS`. Gambar diunduh lalu
  * dikirim, bukan hotlink.
  */
-import { downloadImage, fetchImage, findBlockedTags, imageCaption, listCategories, normalizeTags } from '../lib/image-source.js';
+import { downloadImage, fetchImage, findBlockedTags, listCategories, normalizeTags } from '../lib/image-source.js';
 import { sendImageResult } from '../lib/media-send.js';
 import { userError } from '../lib/errors.js';
 
@@ -65,7 +65,7 @@ const handler = async (m, { conn, text, config, usedPrefix, command }) => {
 
   // GIF dikirim sebagai animasi (GIF WhatsApp) — kalau ffmpeg tidak ada,
   // otomatis jadi stiker WebP animasi supaya tetap bergerak.
-  await sendImageResult(conn, m.chat, { buffer, caption: imageCaption(item), quoted: m, config });
+  await sendImageResult(conn, m.chat, { buffer, caption: '', quoted: m, config });
   return item.id;
 };
 

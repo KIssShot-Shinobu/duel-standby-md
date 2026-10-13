@@ -5,7 +5,7 @@
  *
  * Mengirim foto kartu + caption statistik, lalu teks efek lengkap.
  */
-import { getClient, formatCardCaption, formatCardLine, formatCardText } from '../lib/ygoprodeck.js';
+import { getClient, formatCardCaption, formatCardLine, formatCardText, formatYgoError } from '../lib/ygoprodeck.js';
 import { chunkText, fetchBuffer } from '../lib/functions.js';
 
 const handler = async (m, { conn, text, config, usedPrefix, command }) => {
@@ -58,7 +58,7 @@ const handler = async (m, { conn, text, config, usedPrefix, command }) => {
       card = cards[0];
     }
   } catch (err) {
-    return m.reply(`❌ Gagal mengambil data dari YGOPRODeck:\n${err.message}`);
+    return m.reply(formatYgoError(err));
   }
 
   const caption = formatCardCaption(card);

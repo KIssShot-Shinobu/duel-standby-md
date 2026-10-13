@@ -4,7 +4,7 @@
  *   .banlist ocg
  *   .banlist goat
  */
-import { getClient } from '../lib/ygoprodeck.js';
+import { getClient, formatYgoError } from '../lib/ygoprodeck.js';
 import { chunkText } from '../lib/functions.js';
 
 const MAX_PER_GROUP = 25;
@@ -27,7 +27,7 @@ const handler = async (m, { text, config, usedPrefix, command }) => {
   try {
     payload = await ygo.card({ banlist: format, num: '500', sort: 'name' });
   } catch (err) {
-    return m.reply(`❌ Gagal mengambil banlist ${format.toUpperCase()}:\n${err.message}`);
+    return m.reply(formatYgoError(err));
   }
 
   const cards = payload.data || [];

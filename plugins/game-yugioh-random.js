@@ -2,7 +2,7 @@
  * Kartu Yu-Gi-Oh! acak.
  *   .ygorandom
  */
-import { getClient, formatCardCaption, formatCardText } from '../lib/ygoprodeck.js';
+import { getClient, formatCardCaption, formatCardText, formatYgoError } from '../lib/ygoprodeck.js';
 import { chunkText, fetchBuffer } from '../lib/functions.js';
 
 const handler = async (m, { conn, config }) => {
@@ -12,7 +12,7 @@ const handler = async (m, { conn, config }) => {
   try {
     card = (await ygo.random()).data?.[0] || null;
   } catch (err) {
-    return m.reply(`❌ Gagal mengambil kartu acak:\n${err.message}`);
+    return m.reply(formatYgoError(err));
   }
   if (!card) return m.reply('❌ Tidak ada kartu yang dikembalikan API.');
 
