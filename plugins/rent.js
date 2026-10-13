@@ -130,13 +130,15 @@ const handler = async (m, ctx) => {
           `🗓️ Durasi: ${s.days} hari`,
           '',
           'Cara sewa:',
-          `1. Tambahkan bot ke grup (bot kirim QRIS)`,
+          `1. Tambahkan bot ke grup (bot auto kirim penawaran sewa)`,
           `2. DM bot: ${p}rent <nama grup | link | id>`,
+          `   Contoh : ${p}rent duel standby`,
           '3. Kirim bukti bayar di DM ini',
           '',
           `Perpanjang : ${p}renew <grup>`,
           `Cek status: ${p}rentstatus [grup]`,
-        ].join('\n');
+          s.helpNumber ? `Kesulitan sewa? Klik link ini untuk DM owner langsung: https://wa.me/${s.helpNumber}` : null,
+        ].filter(Boolean).join('\n');
         await sendOffer(conn, m.chat, info, config, db);
         return true;
       }

@@ -224,6 +224,8 @@ export const config = {
     pricePerMonth: envNumber('RENT_PRICE', 0),
     /** gambar QRIS untuk pembayaran (relatif config.root, diganti owner) */
     qrisFile: env('RENT_QRIS', 'assets/qris.jpg'),
+    /** nomor (tanpa +) untuk link DM bantuan sewa yang tampil di menu rent */
+    helpNumber: env('RENT_HELP_NUMBER', '628970080509'),
     /** H-berapa sebelum expired bot mengingatkan penyewa (sekali per periode) */
     reminderDays: envList('RENT_REMINDER_DAYS', ['3', '1']).map((x) => Number(x)),
     /** plugin yang selalu free (prefix nama file plugin) */

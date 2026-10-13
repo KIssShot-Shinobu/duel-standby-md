@@ -37,7 +37,10 @@ handler.onGroupParticipants = async (conn, update, { groupMetadata, config, db }
     `${p}rent ${subject}`,
     '',
     'Bot akan mengirim QRIS & instruksi pembayaran.',
-  ].join('\n');
+    s.helpNumber ? `Kesulitan sewa? Klik link ini untuk DM owner langsung: https://wa.me/${s.helpNumber}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
 
   let image = null;
   try {
