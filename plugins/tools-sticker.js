@@ -54,9 +54,12 @@ const handler = async (m, { conn, args, command, usedPrefix, config }) => {
   // Deteksi dari ISI berkas: lebih akurat daripada mimetype pesan.
   const detected = await detectMediaKind(buffer);
   const mime = detected.mime || messageMime;
-  const isGifLike = detected.kind === 'gif' || detected.kind === 'animated' || /gif/i.test(messageMime) || content.gifPlayback === true;
-  const isVideo = detected.kind === 'video' || VIDEO_MIME.test(messageMime);
-  const isRealVideo = detected.kind === 'video';
+  const isGifFile = detected.kind === 'gif' || detected.kind === 'animated';
+  const isVideoFile = detected.kind === 'video' || VIDEO_MIME.test(messageMime);
+  const isGifPlayback = content.gifPlayback === true;
+  const isGifLike = isGifFile || /gif/i.test(messageMime) || isGifPlayback;
+  const isVideo = isVideoFile || isGifPlayback; // GIF playback dihitung sebagai video untuk proses stiker animasi
+  const isRealVideo = isVideoFile && !isGifPlayback; // video murni = video file BUKAN gif playback
   const isImage = detected.kind === 'image' || detected.kind === 'sticker' || IMAGE_MIME.test(messageMime) || IMAGE_MIME.test(mime);
 
   // Durasi divalidasi LEBIH DULU: video kepanjangan harus ditolak walau encoder
@@ -85,9 +88,18 @@ const handler = async (m, { conn, args, command, usedPrefix, config }) => {
   // GIF/WebP animasi/video => stiker animasi.
   if (isGifLike || isVideo) {
     // Video asli (mp4/webm) hanya bisa lewat ffmpeg; GIF/WebP animasi bisa lewat sharp.
+    // Catatan: WhatsApp mengirim GIF di chat sebagai VIDEO (mp4) dengan gifPlayback=true.
+    // Jika isGifPlayback=true tapi ffmpeg tidak ada, beri pesan yang jelas.
     if (isRealVideo && !hasFfmpeg()) {
       throw userError(
-        '❌ Stiker dari video (mp4) butuh ffmpeg.\nPasang dengan: `apt install ffmpeg`.\n_(GIF tetap bisa distiker tanpa ffmpeg.)_',
+        '❌ Stiker dari video (mp4) butuh ffmpeg.\nPasang dengan: `apt install ffmpeg`.',
+      );
+    }
+    if (isGifPlayback && !hasFfmpeg()) {
+      throw userError(
+        '❌ GIF dari chat WhatsApp dikirim sebagai video (mp4) dan butuh ffmpeg untuk dijadikan stiker.\n' +
+        'Pasang ffmpeg: `apt install ffmpeg`\n' +
+        '_(GIF sebagai file/gambar/dokumen tetap bisa distiker tanpa ffmpeg lewat sharp.)_',
       );
     }
 
