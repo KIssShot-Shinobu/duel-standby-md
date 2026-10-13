@@ -62,7 +62,10 @@ const msg = (text, chat = '628111@s.whatsapp.net', pushName = 'Tester') => ({
 
 const dmMsg = (text, chat = '628111@s.whatsapp.net') => msg(text, chat);
 
-const reply = (sent, chat) => (sent.find((s) => s.chat === chat && s.content?.text)?.content?.text || '');
+const reply = (sent, chat) =>
+  (sent.find((s) => s.chat === chat && (s.content?.text || s.content?.caption))?.content?.text ||
+    sent.find((s) => s.chat === chat && s.content?.caption)?.content?.caption ||
+    '');
 
 test('.rent bare di DM: menampilkan info sewa', async () => {
   const t = await setup();

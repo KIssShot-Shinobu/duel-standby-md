@@ -1,6 +1,6 @@
 # Daftar Command
 
-> Dibuat otomatis oleh `npm run commands -- --markdown` — 58 plugin, 178 command.
+> Dibuat otomatis oleh `npm run commands -- --markdown` — 59 plugin, 178 command.
 > Prefix default: `.` (lihat `PREFIX` di `.env`).
 
 ## ai
@@ -129,5 +129,6 @@
 | `.afk` | — | `_afk.js` |
 | _(event otomatis)_ | — | `_antilink.js` |
 | _(event otomatis)_ | — | `_antispam.js` |
+| _(event otomatis)_ | — | `_rent-guard.js` |
 | _(event otomatis)_ | — | `_welcome.js` |
 
