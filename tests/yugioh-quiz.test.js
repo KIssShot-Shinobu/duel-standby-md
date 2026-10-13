@@ -308,6 +308,35 @@ test('game ganda di chat yang sama ditolak', async () => {
   await quiz.stop('chat@g.us', { silent: true });
 });
 
+test('game di 2 grup berbeda berjalan independen (state per chat)', async () => {
+  const { quiz } = makeHarness({ options: { rounds: 1, mode: 'pilihan', timeoutMs: 5000, roundDelayMs: 0 } });
+
+  const a = await quiz.start('grup-a@g.us', { starter: 'p1@s.whatsapp.net', starterName: 'P1', rounds: 1 });
+  const b = await quiz.start('grup-b@g.us', { starter: 'p2@s.whatsapp.net', starterName: 'P2', rounds: 1 });
+  assert.equal(a.ok, true);
+  assert.equal(b.ok, true);
+  assert.equal(quiz.has('grup-a@g.us'), true);
+  assert.equal(quiz.has('grup-b@g.us'), true);
+
+  // Jawaban benar di grup A -> game A selesai, grup B tidak terganggu.
+  const labelA = quiz.get('grup-a@g.us').choices.find((choice) => choice.correct).label;
+  const resA = await quiz.handleGuess('grup-a@g.us', { sender: 'p1@s.whatsapp.net', name: 'P1', text: labelA });
+  assert.equal(resA.correct, true);
+  assert.equal(quiz.has('grup-a@g.us'), false, 'game grup A selesai');
+  assert.equal(quiz.has('grup-b@g.us'), true, 'game grup B masih berjalan');
+
+  // Pemain di grup B tetap bisa menjawab.
+  const labelB = quiz.get('grup-b@g.us').choices.find((choice) => choice.correct).label;
+  const resB = await quiz.handleGuess('grup-b@g.us', { sender: 'p2@s.whatsapp.net', name: 'P2', text: labelB });
+  assert.equal(resB.correct, true);
+  assert.equal(quiz.has('grup-b@g.us'), false, 'game grup B selesai');
+
+  // Game baru bisa dimulai lagi di grup mana pun setelah selesai.
+  const again = await quiz.start('grup-a@g.us', { starter: 'p1@s.whatsapp.net', starterName: 'P1', rounds: 1 });
+  assert.equal(again.ok, true);
+  await quiz.stop('grup-a@g.us', { silent: true });
+});
+
 // ── Plugin ─────────────────────────────────────────────────────────────────
 
 // Mock fetch global supaya plugin Yu-Gi-Oh tidak benar-benar memanggil API.
