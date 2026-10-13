@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const OUT = 'patch-v1.3.3-lid-identity.mjs';
-const files = ['lib/serialize.js'];
+const files = ['handler.js', 'lib/permissions.js', 'lib/serialize.js'];
 
 const FILES = files.map((f) => {
   const content = fs.readFileSync(path.join(process.cwd(), f), 'utf8');
@@ -42,6 +42,20 @@ const patchContent = `#!/usr/bin/env node
  *    - Setelah pemetaan dipelajari, db.mapLid() 자동으로 menggabungkan record
  *      LID ke record nomor telepon: premium/limit milik nomor dipertahankan,
  *      sedangkan exp/saldo/total command dari record LID ikut terselamatkan.
+ *
+ * 2. Perbaikan kedua: chat GRUP yang hanya mengirim participant = LID
+ *    - Di grup WA sering mengirim key.participant = LID tanpa participantPn
+ *      maupun participantAlt, jadi nomor teleponnya tidak ada di pesan dan
+ *      db.mapLid() tidak punya pasangan untuk disimpan.
+ *    - Satu-satunya sumber pasangan LID <-> nomor di grup adalah daftar
+ *      peserta ({ lid, phoneNumber }), yang selama ini hanya dipakai untuk cek
+ *      admin, bukan untuk pemetaan identitas.
+ *    - Sekarang Perm.findParticipantPhone() dipakai dari handler.js.
+ *    - Pengambilan metadata grup juga tidak lagi bergantung pada groupCache:
+ *      kalau cache belum siap, identitas peserta diambil langsung dari socket.
+ *    - Ditambah peringatan di log kalau pengirim tetap tidak bisa dipetakan ke
+ *      nomor telepon, supaya masalah ini kelihatan dari log dan bukan hanya
+ *      dari gejala "limitnya kok tidak berubah".
  *
  * Catatan: data lama tidak perlu diedit manual. Setelah patch ini dipasang,
  * record ganda dilebur otomatis begitu user itu mengirim pesan berikutnya
