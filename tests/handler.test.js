@@ -8,6 +8,7 @@ import config from '../config.js';
 import { handleMessage, parseCommand } from '../handler.js';
 import { Database } from '../lib/database.js';
 import { PluginManager } from '../lib/plugins.js';
+import * as Rent from '../lib/rent.js';
 
 const pluginsDir = path.resolve(import.meta.dirname, '..', 'plugins');
 const quiet = { warn() {}, error() {}, info() {}, debug() {} };
@@ -143,6 +144,9 @@ test('pesan tanpa konten nyata (protocolMessage) diabaikan', async () => {
   assert.equal(result.reason, 'no-content');
 
   // senderKeyDistributionMessage + teks asli tetap harus diproses
+  // Grup 123@g.us disewa dulu (gating rent aktif secara default), karena tujuan
+  // test ini pemetaan LID, bukan perilaku gating.
+  Rent.activateRent(db, '123@g.us', { renter: '628111222333@s.whatsapp.net', renterName: 'LID User', days: 30, by: 'owner', now: Date.now() });
   const withText = {
     key: { remoteJid: '123@g.us', fromMe: false, id: 'P2', participant: '271446714642565@lid', participantPn: '628111222333@s.whatsapp.net' },
     message: { senderKeyDistributionMessage: { groupId: 'x' }, conversation: '.calc 3*3' },
