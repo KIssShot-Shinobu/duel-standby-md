@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import config from '../config.js';
 import { Database, DEFAULT_USER, initDatabase } from '../lib/database.js';
 import { consumeLimit, isParticipantAdmin, levelFromExp, levelProgress, expForLevel, refreshLimit } from '../lib/permissions.js';
 
@@ -146,6 +147,47 @@ test('database: user(LID) memakai record nomor telepon setelah dipetakan', () =>
   viaLid.limitBonus = 5;
   assert.equal(db.user(pn).premium, true);
   assert.equal(db.user(pn).limitBonus, 5);
+  db.close();
+});
+
+test('database: record LID lama (premium/limit 0) tidak menimpa premium nomor', () => {
+  // Keadaan yang terbentuk di server sebelum pemetaan LID diperbaiki:
+  // owner menambah premium ke record nomor telepon, sementara semua pesan user
+  // masuk ke record LID (yang stayed free 20 limit). Saat pemetaan akhirnya
+  // dipelajari, kedua record harus dilebur: premium/limit dari nomor bertahan,
+  // dan exp/saldo/command dari record LID ikut terselamatkan.
+  const dir = tmpDir();
+  const db = new Database(path.join(dir, 'database.json'), { saveInterval: 5, logger: quiet });
+  db.load();
+
+  const lid = '271446714642565@lid';
+  const pn = '6289530694332@s.whatsapp.net';
+
+  const pnUser = db.user(pn);
+  pnUser.premium = true;
+  pnUser.premiumUntil = Date.now() + 30 * 86400000;
+  pnUser.limit = config.limits.premium;
+  pnUser.exp = 0;
+  pnUser.saldo = 0;
+  pnUser.totalCommands = 0;
+
+  const lidUser = db.user(lid);
+  lidUser.premium = false;
+  lidUser.limit = config.limits.free;
+  lidUser.exp = 500;
+  lidUser.saldo = 300;
+  lidUser.totalCommands = 50;
+
+  db.mapLid(lid, pn);
+
+  assert.equal(db.data.users[lid], undefined, 'record LID harus hilang setelah dilebur');
+  const merged = db.user(pn);
+  assert.equal(merged.premium, true, 'premium dari nomor telepon tidak boleh ditimpa record LID');
+  assert.ok(merged.premiumUntil > Date.now(), 'masa premium harus ikut tersimpan');
+  assert.equal(merged.limit, config.limits.premium, 'limit premium harus bertahan');
+  assert.equal(merged.exp, 500, 'exp dari record LID harus ikut terselamatkan');
+  assert.equal(merged.saldo, 300, 'saldo dari record LID harus ikut terselamatkan');
+  assert.equal(merged.totalCommands, 50, 'total command dari record LID harus ikut terselamatkan');
   db.close();
 });
 

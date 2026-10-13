@@ -189,6 +189,41 @@ test('pesan ber-LID dengan participantAlt: premium/limit nomor telepon tetap ter
   db.close();
 });
 
+test('chat pribadi ber-LID: premium/limit nomor telepon tetap terpakai', async () => {
+  // Regresi: di chat pribadi WA baru, `key.remoteJid` = nomor telepon dan
+  // `key.remoteJidAlt` = LID. Kalau hanya remoteJidAlt yang dipakai untuk
+  // menentukan pengirim, user tercatat di record LID terpisah sehingga premium
+  // yang diberikan owner lewat nomor telepon tidak terlihat saat dia `.profile`.
+  const { db, plugins, conn, sent } = await setup();
+  const lid = '271446714642565@lid';
+  const pn = '628111222333@s.whatsapp.net';
+
+  // Owner sudah memberi premium + limit ke NOMOR tersebut.
+  const granted = db.user(pn);
+  granted.premium = true;
+  granted.premiumUntil = Date.now() + 30 * 86400000;
+  granted.limitBonus = 10;
+  granted.limit = config.limits.premium + 10;
+
+  const raw = {
+    key: { remoteJid: pn, remoteJidAlt: lid, fromMe: false, id: 'LIDPRIV1' },
+    message: { conversation: '.profile' },
+    messageTimestamp: Math.floor(Date.now() / 1000),
+    pushName: 'LID User',
+  };
+  const result = await handleMessage(conn, raw, { plugins, db, config, logger: quiet });
+  assert.equal(result.handled, true);
+
+  assert.equal(db.data.users[lid], undefined, 'tidak boleh ada record LID terpisah');
+  assert.equal(db.data.lidMap[lid], pn, 'pemetaan LID -> nomor telepon harus tersimpan');
+
+  const body = sent.map((item) => item.content?.text || '').join('\n');
+  assert.match(body, /Premium: Ya/, 'premium yang diberikan owner harus terlihat di .profile');
+  assert.match(body, new RegExp(`Limit: ${config.limits.premium + 10}/`), 'limit harus menampilkan pemberian owner');
+  assert.match(body, /\+10 bonus owner/);
+  db.close();
+});
+
 test('ctx.wait() mengirim pesan tunggu lalu bisa mengeditnya', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rtxzy-wait-plugins-'));
   fs.writeFileSync(
