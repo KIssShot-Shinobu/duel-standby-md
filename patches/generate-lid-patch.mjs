@@ -9,7 +9,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const OUT = 'patch-v1.3.3-lid-identity.mjs';
-const files = ['handler.js', 'lib/permissions.js', 'lib/serialize.js'];
+const files = [
+  'handler.js',
+  'lib/database.js',
+  'lib/permissions.js',
+  'lib/serialize.js',
+  'plugins/main-info.js',
+  'plugins/owner-user.js',
+];
 
 const FILES = files.map((f) => {
   const content = fs.readFileSync(path.join(process.cwd(), f), 'utf8');
@@ -57,9 +64,31 @@ const patchContent = `#!/usr/bin/env node
  *      nomor telepon, supaya masalah ini kelihatan dari log dan bukan hanya
  *      dari gejala "limitnya kok tidak berubah".
  *
- * Catatan: data lama tidak perlu diedit manual. Setelah patch ini dipasang,
- * record ganda dilebur otomatis begitu user itu mengirim pesan berikutnya
- * (juga saat bot start, lewat repairLidRecords()).
+ * 3. Perbaikan ketiga (INI YANG BENAR-BENAR MENYEBABKAN GEJALAMU)
+ *    - Dari database.json asli ditemukan 4 user premium punya record kedua
+ *      yang kuncinya adalah LID berpola nomor telepon, contoh:
+ *        271446714642565@s.whatsapp.net
+ *        @271446714642565
+ *        81596157788284@s.whatsapp.net
+ *      Record-record itulah yang menyimpan premium/limit dari owner, sedangkan
+ *      semua pesan user resolve ke nomor aslinya -> user tetap free.
+ *      Gejalanya: .premium list bilang premium aktif, tapi user lihat 0/20.
+ *    - Penyebab: LID juga 14-15 digit sehingga LOLOS dari validasi nomor
+ *      (NUMBER_ARG /^@?\+?\d{7,20}$/ di lib/functions.js), lalu toJid()
+ *      menempelkan suffix @s.whatsapp.net dan membuat record hantu.
+ *      resolveLid() tidak bisa menangkapnya karena jid-nya sudah tidak
+ *      berakhiran @lid.
+ *    - Sekarang db.resolveIdentity() menyelesaikan identitas baik JID @lid
+ *      maupun LID-yang-dipaksa-jadi-nomor; dipakai di db.user(), .premium,
+ *      .limit, dan .profile.
+ *    - mapLid() dan repairLidRecords() menggabungkan semua bentuk record hantu
+ *      dan tetap jalan walau pemetaannya sudah diketahui sebelumnya.
+ *    - mergeUserRecords() memakai premiumUntil TERPANJANG, karena satu user
+ *      bisa punya dua record hantu dengan durasi berbeda.
+ *
+ * Catatan: data lama TIDAK perlu diedit manual. repairLidRecords() jalan
+ * otomatis saat bot start, jadi cukup restart. Seharusnya muncul di log:
+ *   [database] 5 record LID dilebur ke record nomor telepon
  */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
