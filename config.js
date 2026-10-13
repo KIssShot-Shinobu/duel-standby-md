@@ -210,6 +210,32 @@ export const config = {
     monthlyCap: envNumber('BUY_LIMIT_MONTHLY_CAP', 300),
   },
 
+  /**
+   * Sewa bot per grup (fitur rent).
+   * Grup tanpa sewa aktif terkunci kecuali plugin free (yugioh & stiker)
+   * dan main-*. Harga bisa di-override per menit lewat `.rent price` (tersimpan
+   * di db.settings.rentPrice).
+   */
+  rent: {
+    enabled: env('RENT_ENABLED', 'true') !== 'false',
+    /** durasi sewa 1 bulan = 30 hari */
+    days: envNumber('RENT_DAYS', 30),
+    /** harga sewa per bulan; 0 = owner set lewat `.rent price` */
+    pricePerMonth: envNumber('RENT_PRICE', 0),
+    /** gambar QRIS untuk pembayaran (relatif config.root, diganti owner) */
+    qrisFile: env('RENT_QRIS', 'assets/qris.jpg'),
+    /** H-berapa sebelum expired bot mengingatkan penyewa (sekali per periode) */
+    reminderDays: envList('RENT_REMINDER_DAYS', ['3', '1']).map((x) => Number(x)),
+    /** plugin yang selalu free (prefix nama file plugin) */
+    freePlugins: ['game-yugioh', 'tools-sticker', 'sticker-', 'tools-toimg'],
+    /** plugin yang tidak pernah dikunci */
+    alwaysAllowed: ['main-', 'owner-', 'rent.js', '_rent-guard'],
+    /** pesan saat command terkunci karena grup tidak punya sewa aktif */
+    gatedMessage: env('RENT_GATED_MSG', '🔒 Fitur ini butuh sewa aktif. Ketik `.rent` untuk menyewa.'),
+    /** seberapa sering sweep cek expired/reminder */
+    sweepIntervalMs: 6 * 60 * 60 * 1000,
+  },
+
   /** Hadiah tiap pesan chat (XP & saldo acak) */
   rewards: {
     chat: {
