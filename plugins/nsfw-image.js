@@ -33,8 +33,25 @@ import {
   toggleDeniedText,
 } from '../lib/nsfw-gate.js';
 
-/** Dedup sederhana per chat: jangan kirim gambar yang sama dua kali berturut-turut. */
+/** Dedup per chat: simpan history 20 gambar terakhir supaya tidak repeat. */
 const lastSeen = new Map();
+const MAX_HISTORY = 20;
+
+function getAvoidSet(chatId) {
+  const history = lastSeen.get(chatId);
+  if (!history) return new Set();
+  return new Set(history);
+}
+
+function addToHistory(chatId, itemId) {
+  let history = lastSeen.get(chatId);
+  if (!history) {
+    history = [];
+    lastSeen.set(chatId, history);
+  }
+  history.push(itemId);
+  if (history.length > MAX_HISTORY) history.shift();
+}
 
 const TAG_EXAMPLES = ['cat_ears', 'maid', 'swimsuit', 'thighhighs', 'yuri', 'kimono'];
 
@@ -142,12 +159,12 @@ const handler = async (m, ctx) => {
 
   let item;
   try {
-    item = await fetchImage({ mode: 'nsfw', query, config, avoid: new Set([lastSeen.get(m.chat)]) });
+    item = await fetchImage({ mode: 'nsfw', query, config, avoid: getAvoidSet(m.chat) });
   } catch (err) {
     refundLimit();
     throw userError(`❌ Gagal mengambil gambar 18+.\n_${err.message}_`);
   }
-  lastSeen.set(m.chat, item.id);
+  addToHistory(m.chat, item.id);
 
   const buffer = await downloadImage(item, { config }).catch(() => null);
   if (!buffer) {

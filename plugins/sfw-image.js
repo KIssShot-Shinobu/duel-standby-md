@@ -14,8 +14,25 @@ import { downloadImage, fetchImage, findBlockedTags, imageCaption, listCategorie
 import { sendImageResult } from '../lib/media-send.js';
 import { userError } from '../lib/errors.js';
 
-/** Dedup sederhana per chat. */
+/** Dedup per chat: simpan history 20 gambar terakhir supaya tidak repeat. */
 const lastSeen = new Map();
+const MAX_HISTORY = 20;
+
+function getAvoidSet(chatId) {
+  const history = lastSeen.get(chatId);
+  if (!history) return new Set();
+  return new Set(history);
+}
+
+function addToHistory(chatId, itemId) {
+  let history = lastSeen.get(chatId);
+  if (!history) {
+    history = [];
+    lastSeen.set(chatId, history);
+  }
+  history.push(itemId);
+  if (history.length > MAX_HISTORY) history.shift();
+}
 
 const TAG_EXAMPLES = ['cat_ears', 'kimono', 'school_uniform', 'landscape', 'twintails'];
 
@@ -37,11 +54,11 @@ const handler = async (m, { conn, text, config, usedPrefix, command }) => {
 
   let item;
   try {
-    item = await fetchImage({ mode: 'sfw', query, config, avoid: new Set([lastSeen.get(m.chat)]) });
+    item = await fetchImage({ mode: 'sfw', query, config, avoid: getAvoidSet(m.chat) });
   } catch (err) {
     throw userError(`❌ Gagal mengambil gambar.\n_${err.message}_`);
   }
-  lastSeen.set(m.chat, item.id);
+  addToHistory(m.chat, item.id);
 
   const buffer = await downloadImage(item, { config }).catch(() => null);
   if (!buffer) throw userError('❌ Gambar gagal diunduh. Coba lagi sebentar lagi.');
@@ -54,7 +71,7 @@ const handler = async (m, { conn, text, config, usedPrefix, command }) => {
 
 handler.help = ['sfw', 'sfwlist'];
 handler.tags = ['image'];
-handler.command = /^(sfw|anime|sfwlist)$/i;
+handler.command = /^(sfw|anime|sfwlist|w|waifu)$/i;
 handler.limit = true;
 
 export default handler;
