@@ -191,6 +191,59 @@ test('database: record LID lama (premium/limit 0) tidak menimpa premium nomor', 
   db.close();
 });
 
+test('database: dua record hantu untuk satu user -> masa premium terpanjang', () => {
+  // Terlihat di data panel: satu user punya `271446714642565@s.whatsapp.net`
+  // (premium s/d 2027-03-31) DAN `@271446714642565` (s/d 2026-11-11, limit
+  // 1000). Setelah dilebur, yang harus menang adalah masa premium TERPANJANG.
+  const dir = tmpDir();
+  const db = new Database(path.join(dir, 'database.json'), { saveInterval: 5, logger: quiet });
+  db.load();
+
+  const lid = '271446714642565@lid';
+  const pn = '628970080509@s.whatsapp.net';
+  const day = 86400000;
+  db.data.lidMap[lid] = pn;
+
+  db.user(pn).exp = 812;
+  db.data.users[`${lid.split('@')[0]}@s.whatsapp.net`] = {
+    ...DEFAULT_USER(), premium: true, premiumUntil: Date.now() + 200 * day, limit: 120, limitBonus: 20,
+  };
+  db.data.users[`@${lid.split('@')[0]}`] = {
+    ...DEFAULT_USER(), premium: true, premiumUntil: Date.now() + 30 * day, limit: 1000,
+  };
+
+  const repaired = db.repairLidRecords();
+
+  assert.equal(repaired, 2, 'kedua record hantu harus digabung');
+  assert.equal(db.data.users[`${lid.split('@')[0]}@s.whatsapp.net`], undefined);
+  assert.equal(db.data.users[`@${lid.split('@')[0]}`], undefined);
+  const u = db.user(pn);
+  assert.equal(u.premium, true);
+  assert.ok(u.premiumUntil > Date.now() + 199 * day, 'masa premium TERPANJANG harus menang');
+  assert.equal(u.limitBonus, 20, 'bonus hanya di satu record, tidak boleh berlipat');
+  assert.equal(u.limit, 1000, 'limit tertinggi harus menang');
+  assert.equal(u.exp, 812, 'aktivitas user asli harus tetap ada');
+  db.close();
+});
+
+test('database: resolveIdentity mengubah LID-yang-dipaksakan-jadi-nomor', () => {
+  const dir = tmpDir();
+  const db = new Database(path.join(dir, 'database.json'), { saveInterval: 5, logger: quiet });
+  db.load();
+
+  db.data.lidMap['271446714642565@lid'] = '628970080509@s.whatsapp.net';
+
+  for (const bogus of ['271446714642565@s.whatsapp.net', '@271446714642565', '271446714642565']) {
+    assert.equal(
+      db.resolveIdentity(bogus),
+      '628970080509@s.whatsapp.net',
+      `resolveIdentity harus mengembalikan nomor asli untuk ${bogus}`,
+    );
+    assert.equal(db.user(bogus).jid, '628970080509@s.whatsapp.net', `user(${bogus}) harus record nomor`);
+  }
+  db.close();
+});
+
 test('database: load() melebur sisa record LID dari versi lama', () => {
   const dir = tmpDir();
   const file = path.join(dir, 'database.json');

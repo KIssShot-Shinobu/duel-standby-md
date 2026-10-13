@@ -134,6 +134,36 @@ test('E2E: .limit add saat reply user LID masuk ke record nomor telepon', async 
   db.close();
 });
 
+test('E2E: .premium add dengan ANGKA LID tidak membuat user hantu', async () => {
+  // Regresi dari data server sungguhan: LID juga 14-15 digit, jadi lolos dari
+  // NUMBER_ARG dan toJid() menempelkan @s.whatsapp.net padanya. Record
+  // `271446714642565@s.whatsapp.net` tercipta, premium masuk ke situ, dan user
+  // aslinya (yang pesanannya selalu resolve ke nomor telepon) tetap free.
+  const { db, plugins, conn } = await setup();
+  db.mapLid(LID, TARGET);
+
+  await run(conn, db, plugins, text('.premium add 271446714642565 30'));
+
+  assert.equal(
+    db.data.users['271446714642565@s.whatsapp.net'],
+    undefined,
+    'LID tidak boleh diubah jadi nomor telepon palsu',
+  );
+  assert.equal(db.user(TARGET).premium, true, 'premium harus masuk ke nomor telepon sebenarnya');
+  db.close();
+});
+
+test('E2E: .limit add dengan ANGKA LID tidak membuat user hantu', async () => {
+  const { db, plugins, conn } = await setup();
+  db.mapLid(LID, TARGET);
+
+  await run(conn, db, plugins, text('.limit add 271446714642565 10'));
+
+  assert.equal(db.data.users['271446714642565@s.whatsapp.net'], undefined);
+  assert.equal(db.user(TARGET).limitBonus, 10, 'bonus limit harus masuk ke nomor telepon sebenarnya');
+  db.close();
+});
+
 test('E2E: mention user LID tetap masuk ke record nomor telepon', async () => {
   const { db, plugins, conn } = await setup();
   db.mapLid(LID, TARGET);

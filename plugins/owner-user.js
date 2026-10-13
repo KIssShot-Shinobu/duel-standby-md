@@ -71,7 +71,11 @@ const handler = async (m, { args, command, config, db }) => {
   const { jid: rawTarget, rest } = resolveTarget(m, withAction ? args.slice(1) : args, { shorthand: withAction });
   // Target bisa berupa LID (WhatsApp baru). Arahkan ke record nomor teleponnya
   // supaya premium/limit tidak masuk ke record LID yang berbeda.
-  const target = rawTarget ? db.resolveLid?.(rawTarget) || rawTarget : rawTarget;
+  // `resolveIdentity` (bukan `resolveLid`) karena target bisa berupa LID yang
+  // salah dibaca sebagai nomor telepon — `271446714642565@s.whatsapp.net`.
+  // Kalau tidak diselesaikan di sini, premium/limit owner masuk ke record hantu
+  // dan user-nya tetap free.
+  const target = rawTarget ? db.resolveIdentity?.(rawTarget) || rawTarget : rawTarget;
 
   if (!target || !isJidUser(target)) {
     return m.reply(HELP(config));

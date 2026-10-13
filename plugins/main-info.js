@@ -25,7 +25,7 @@ const handler = async (m, { conn, text, args, command, config, db, plugins, user
 
   if (/^(profile|profil|me)$/i.test(command)) {
     const requested = resolveUserTarget(m, args || [], { shorthand: false }).jid;
-    const targetJid = requested ? db.resolveLid?.(requested) || requested : m.sender;
+    const targetJid = requested ? db.resolveIdentity?.(requested) || requested : m.sender;
     const selfJid = db.resolveLid?.(m.sender) || m.sender;
     const isSelf = targetJid === selfJid;
 
