@@ -183,3 +183,28 @@ test('resolveGroupJid: link valid/batal, id, nama, tidak ketemu', async () => {
   assert.equal(await Rent.resolveGroupJid(conn, 'tidak ada grup ini'), null);
   assert.equal(await Rent.resolveGroupJid(conn, ''), null);
 });
+
+test('review: extendRent mereset reminders supaya periode berikutnya dapat reminder lagi', () => {
+  const db = fakeDb();
+  const cfg = rentConfig();
+  Rent.activateRent(db, 'g@g.us', { renter: 'a', renterName: '', days: 30, by: 'o', now: NOW });
+
+  // H-3 periode pertama -> reminder d3 terkirim
+  let plan = Rent.sweepRentals(db, cfg, { now: NOW + 27 * DAY });
+  assert.equal(plan.remind.length, 1);
+
+  // renew (perpanjang) di H-1; expiry baru = NOW+29d+30d = NOW+59d ... sebenarnya
+  // extendRent maju dari expiresAt lama (NOW+30d) -> NOW+60d. H-3 periode kedua = NOW+57d.
+  Rent.extendRent(db, 'g@g.us', { days: 30, by: 'o', now: NOW + 29 * DAY });
+
+  // H-3 periode kedua harus memicu reminder LAGI
+  plan = Rent.sweepRentals(db, cfg, { now: NOW + 57 * DAY });
+  assert.equal(plan.remind.length, 1, 'reminder periode kedua harus muncul setelah renew');
+});
+
+test('review: ownerInGroup mengenali peserta ber-LID yang punya phoneNumber', () => {
+  const cfg = rentConfig();
+  assert.equal(Rent.ownerInGroup([{ id: '271446714642565@lid', phoneNumber: '6280000000000@s.whatsapp.net' }], cfg), true);
+  assert.equal(Rent.ownerInGroup([{ id: '271446714642565@lid' }], cfg), false);
+  assert.equal(Rent.ownerInGroup([{ id: '6280000000000@s.whatsapp.net' }], cfg), true);
+});
