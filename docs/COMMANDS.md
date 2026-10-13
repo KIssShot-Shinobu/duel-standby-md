@@ -1,6 +1,6 @@
 # Daftar Command
 
-> Dibuat otomatis oleh `npm run commands -- --markdown` — 57 plugin, 173 command.
+> Dibuat otomatis oleh `npm run commands -- --markdown` — 58 plugin, 178 command.
 > Prefix default: `.` (lihat `PREFIX` di `.env`).
 
 ## ai
@@ -82,6 +82,7 @@
 | `.info`, `.profile`, `.profil`, `.daftar` | — | `main-info.js` |
 | `.menu`, `.help`, `.bantuan` | — | `main-menu.js` |
 | `.ping`, `.speed` | — | `main-ping.js` |
+| `.rent`, `.sewa`, `.rentstatus`, `.renew`, `.grouplist` | — | `rent.js` |
 
 ## nsfw
 
