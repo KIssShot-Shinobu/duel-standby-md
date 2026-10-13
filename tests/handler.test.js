@@ -185,7 +185,7 @@ test('pesan ber-LID dengan participantAlt: premium/limit nomor telepon tetap ter
   const body = sent.map((item) => item.content?.text || '').join('\n');
   assert.match(body, /Premium: Ya/, 'premium yang diberikan owner harus terlihat di .profile');
   assert.match(body, new RegExp(`Limit: ${config.limits.premium + 10}/`), 'limit harus menampilkan pemberian owner');
-  assert.match(body, /\+10 bonus owner/);
+  assert.match(body, /\+10 bonus/);
   db.close();
 });
 
@@ -259,7 +259,7 @@ test('chat pribadi ber-LID: premium/limit nomor telepon tetap terpakai', async (
   const body = sent.map((item) => item.content?.text || '').join('\n');
   assert.match(body, /Premium: Ya/, 'premium yang diberikan owner harus terlihat di .profile');
   assert.match(body, new RegExp(`Limit: ${config.limits.premium + 10}/`), 'limit harus menampilkan pemberian owner');
-  assert.match(body, /\+10 bonus owner/);
+  assert.match(body, /\+10 bonus/);
   db.close();
 });
 

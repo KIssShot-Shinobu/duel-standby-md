@@ -181,6 +181,35 @@ export const config = {
     premiumDays: envNumber('PREMIUM_DAYS', 30),
   },
 
+  /**
+   * Jual limit ke user pakai saldo in-game (command `.buylimit`).
+   *
+   * Saldo didapat dari chat & kuis, jadi ini jadi penyeimbang ekonomi bot:
+   * user yang aktif tidak akan kehabisan limit, tapi saldo yang dikumpulkan
+   * tidak menumpuk tanpaopperan.
+   *
+   * Limit yang dibeli disimpan sebagai bonus permanen — tidak hilang saat reset
+   * harian, dan langsung terpakai seperti limit biasa.
+   */
+  buyLimit: {
+    enabled: env('BUY_LIMIT_ENABLED', 'true') !== 'false',
+    /** saldo per 1 limit, untuk pembelian jumlah bebas */
+    price: envNumber('BUY_LIMIT_PRICE', 250),
+    /** paket: selalu lebih murah dari harga satuan */
+    packages: [
+      { limit: 10, price: 2000 },
+      { limit: 30, price: 5000 },
+      { limit: 60, price: 9000 },
+    ],
+    /** rentang pembelian jumlah bebas */
+    min: envNumber('BUY_LIMIT_MIN', 1),
+    max: envNumber('BUY_LIMIT_MAX', 60),
+    /** batas total pembelian per siklus limit harian */
+    dailyCap: envNumber('BUY_LIMIT_DAILY_CAP', 60),
+    /** batas total pembelian per bulan kalender */
+    monthlyCap: envNumber('BUY_LIMIT_MONTHLY_CAP', 300),
+  },
+
   /** Hadiah tiap pesan chat (XP & saldo acak) */
   rewards: {
     chat: {

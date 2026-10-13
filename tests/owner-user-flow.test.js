@@ -229,7 +229,7 @@ test('E2E: setelah premium + limit diberikan, .profile <nomor> menampilkan perub
     new RegExp(`Limit: ${baseConfig.limits.premium + 10}/${baseConfig.limits.premium + 10}`),
     `limit di profil harus ${baseConfig.limits.premium + 10}`,
   );
-  assert.match(body, /\+10 bonus owner/);
+  assert.match(body, /\+10 bonus/);
   db.close();
 });
 

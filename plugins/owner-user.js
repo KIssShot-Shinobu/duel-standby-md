@@ -98,7 +98,7 @@ const handler = async (m, { args, command, config, db }) => {
       [
         `✅ Limit ${bareNumber(target)} sekarang *${result.limit}*`,
         `📊 kuota harian (setelah reset): *${result.quota}*`,
-        result.bonus ? `➕ bonus owner: *+${result.bonus}* (tidak hilang saat reset harian)` : '',
+        result.bonus ? `➕ total bonus: *+${result.bonus}* (owner + pembelian user, tidak hilang saat reset harian)` : '',
         '',
         `_Cek dari sisi user: \`${config.bot.prefix[0]}profile ${bareNumber(target)}\`_`,
       ]
@@ -168,7 +168,7 @@ const handler = async (m, { args, command, config, db }) => {
     db.touch();
     await db.save?.(true);
     return m.reply(
-      `✅ Limit ${bareNumber(target)} direset menjadi *${limit}*${bonus() ? ` (termasuk bonus owner +${bonus()})` : ''}`,
+      `✅ Limit ${bareNumber(target)} direset menjadi *${limit}*${bonus() ? ` (termasuk total bonus +${bonus()})` : ''}`,
     );
   }
 
