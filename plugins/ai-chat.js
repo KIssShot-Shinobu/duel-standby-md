@@ -158,19 +158,30 @@ const handler = async (m, { text, command, config, chatData, db, usedPrefix, isO
 };
 
 /**
- * Hook: owner REPLY pesan bot ATAU TAG/MENTION bot -> langsung dijawab AI
- * (persona waifu). Berjalan di DM & grup, bypass gating rent.
+ * Hook: owner berbicara dengan bot -> langsung dijawab AI berpersona waifu.
+ * Terdiri dari: DM (chat pribadi), reply apa pun, atau tag/mention bot.
+ * Deteksi reply tidak bergantung pada `m.quoted.fromMe` (WhatsApp kadang
+ * memakai LID untuk participant), jadi cukup keberadaan `m.quoted`.
+ * Berjalan DM & grup, bypass gating rent.
  */
 handler.all = async (m, { conn, config, isOwner } = {}) => {
   if (isOwner !== true) return;
   if (config?.ai?.ownerEnabled === false) return;
-  if (!config?.ai?.key) return;
   if (m.fromMe || !m.text) return;
 
   const botJid = conn?.user?.id ? cleanJid(conn.user.id) : '';
-  const quotedBot = m.quoted?.fromMe === true;
   const taggedBot = Boolean(botJid && (m.mentionedJid || []).some((jid) => cleanJid(jid) === botJid));
-  if (!quotedBot && !taggedBot) return;
+  const directed = m.isGroup === false || Boolean(m.quoted) || taggedBot;
+  if (!directed) return;
+
+  if (!config?.ai?.key) {
+    try {
+      await m.reply('Hmph. Aku belum bisa berbicara — pemilikku belum mengisi AI_KEY di .env.');
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
 
   const prompt = String(m.text).trim();
   if (!prompt) return;

@@ -86,7 +86,7 @@ const tagMsg = (text) => ({
   pushName: 'Owner',
 });
 
-const aiText = (sent) => sent.filter((s) => s.chat === 'o1@g.us').map((s) => s.text || s.caption || '').join('\n');
+const aiText = (sent) => sent.map((s) => s.text || s.caption || '').join('\n');
 
 test('owner reply pesan bot -> AI menjawab + memori tersimpan (bypass gating)', async () => {
   const t = await setup();
@@ -125,6 +125,29 @@ test('NON-owner reply pesan bot -> AI TIDAK dipanggil', async () => {
   await handleMessage(t.conn, replyMsg('halo bot', false), { plugins: t.plugins, db: t.db, config: t.config, logger: quiet });
   assert.equal(aiCalls, 0, 'non-owner tidak boleh memicu AI owner');
   assert.doesNotMatch(aiText(t.sent), /tidak bilang aku rindu/);
+  t.db.close();
+});
+
+test('owner DM teks polos (tanpa reply/tag) -> AI menjawab', async () => {
+  const t = await setup();
+  stubAI('Hmph. Kau mencariku?');
+  await handleMessage(t.conn, {
+    key: { remoteJid: OWNER, fromMe: false, id: `D${Math.random()}` },
+    message: { conversation: 'kamu di mana?' },
+    messageTimestamp: Math.floor(Date.now() / 1000),
+    pushName: 'Owner',
+  }, { plugins: t.plugins, db: t.db, config: t.config, logger: quiet });
+  assert.equal(aiCalls, 1);
+  assert.match(aiText(t.sent), /mencariku/);
+  t.db.close();
+});
+
+test('tanpa AI_KEY -> owner reply diberi tahu (bukan diam)', async () => {
+  const t = await setup({ key: '' });
+  aiCalls = 0;
+  await handleMessage(t.conn, replyMsg('halo'), { plugins: t.plugins, db: t.db, config: t.config, logger: quiet });
+  assert.equal(aiCalls, 0);
+  assert.match(aiText(t.sent), /AI_KEY/);
   t.db.close();
 });
 
