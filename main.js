@@ -15,6 +15,7 @@ import { createApi } from './lib/api.js';
 import { createConnection } from './lib/connection.js';
 import * as Rent from './lib/rent.js';
 import { startHealthServer, writeStatus } from './lib/health.js';
+import { getOwnerMemory } from './lib/owner-ai.js';
 import { hasFfmpeg, hasYtDlp } from './lib/media.js';
 import { backupSessionDir } from './lib/session.js';
 import { dispatchCall, dispatchGroupParticipants, dispatchGroupsUpdate, handleMessage } from './handler.js';
@@ -294,6 +295,12 @@ if (config.flags.noConnect) {
       await connection.stop();
       await db.save(true);
       db.close();
+      // Simpan memori AI owner yang mungkin masih menunggu debounce.
+      try {
+        getOwnerMemory(config).flush();
+      } catch {
+        /* opsional */
+      }
       publishStatus({ event: 'shutdown', signal });
     } finally {
       process.exit(0);

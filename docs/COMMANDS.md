@@ -1,13 +1,13 @@
 # Daftar Command
 
-> Dibuat otomatis oleh `npm run commands -- --markdown` — 59 plugin, 178 command.
+> Dibuat otomatis oleh `npm run commands -- --markdown` — 59 plugin, 179 command.
 > Prefix default: `.` (lihat `PREFIX` di `.env`).
 
 ## ai
 
 | Command | Keterangan syarat | File |
 |---|---|---|
-| `.ai`, `.chatgpt`, `.resetai` | 1 limit | `ai-chat.js` |
+| `.ai`, `.chatgpt`, `.resetai`, `.resetownai` | 1 limit | `ai-chat.js` |
 
 ## anime
 

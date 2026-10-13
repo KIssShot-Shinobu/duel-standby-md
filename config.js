@@ -11,6 +11,7 @@ import './lib/env.js';
 import { env, envNumber, envList } from './lib/env.js';
 import { parseArgv, flagEnabled } from './lib/argv.js';
 import { DEFAULT_BLOCKED_TAGS } from './lib/image-source.js';
+import { SHINOBU_PERSONA } from './lib/shinobu-persona.js';
 
 const ROOT = path.resolve(import.meta.dirname);
 const { flags, positionals } = parseArgv();
@@ -105,6 +106,16 @@ export const config = {
     base: env('AI_BASE', 'https://api.openai.com/v1'),
     key: env('AI_KEY', ''),
     model: env('AI_MODEL', 'gpt-4o-mini'),
+    /** Perilaku khusus AI untuk OWNER (reply/tag bot -> jawab sebagai waifu) */
+    ownerEnabled: env('AI_OWNER_ENABLED', 'true') !== 'false',
+    /** Model khusus owner (kosong = pakai ai.model) */
+    ownerModel: env('AI_OWNER_MODEL', ''),
+    /** Panjang riwayat yang diingat untuk percakapan owner */
+    ownerHistory: envNumber('AI_OWNER_HISTORY', 50),
+    /** File penyimpanan memori owner (terpisah dari database utama) */
+    ownerFile: env('AI_OWNER_FILE', path.join('database', 'owner-ai.json')),
+    /** Sistem prompt persona owner (default = Oshino Shinobu) */
+    ownerPersona: env('AI_OWNER_PERSONA', SHINOBU_PERSONA),
   },
 
   /** Yu-Gi-Oh! API (YGOPRODeck) â€” gratis, tanpa API key */
