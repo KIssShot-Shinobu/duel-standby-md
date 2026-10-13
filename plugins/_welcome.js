@@ -63,7 +63,7 @@ function buildFooter(config, db) {
     `• DM: ${p}rent <nama grup | link | id>`,
     s.helpNumber ? `• Klik link: https://wa.me/${s.helpNumber}` : null,
     '',
-    `👉 ${config?.bot?.name || 'RTXZY Clean'}`,
+    `👉 ${config?.bot?.name || 'Duel Standby'}`,
   ]
     .filter(Boolean)
     .join('\n');

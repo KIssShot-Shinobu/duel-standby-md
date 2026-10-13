@@ -34,7 +34,7 @@ test('helper pesan tidak memakai markdown ** (harus * saja)', () => {
     ),
     botInfo(
       {
-        name: 'RTXZY Clean',
+        name: 'Duel Standby',
         version: '1.3.0',
         ownerName: 'Owner',
         pluginCount: 49,

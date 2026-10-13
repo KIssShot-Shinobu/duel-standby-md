@@ -32,7 +32,7 @@ export const config = {
   startedAt: Date.now(),
 
   bot: {
-    name: env('BOT_NAME', 'RTXZY Clean'),
+    name: env('BOT_NAME', 'Duel Standby'),
     ownerName: env('OWNER_NAME', 'Owner'),
     /** Setiap karakter menjadi prefix tersendiri, sama seperti RTXZY-MD */
     prefix: [...new Set(prefixSource.split(''))],
@@ -42,7 +42,7 @@ export const config = {
     modsJids: toJids(mods),
     premiumJids: toJids(premiums),
     mode: flags.self ? 'self' : 'public',
-    packname: env('STICKER_PACKNAME', 'RTXZY Clean'),
+    packname: env('STICKER_PACKNAME', 'Duel Standby'),
     author: env('STICKER_AUTHOR', 'Bot WhatsApp'),
     thumbnail: env('BOT_THUMBNAIL', ''),
     timezone: env('TIMEZONE', 'Asia/Jakarta'),
