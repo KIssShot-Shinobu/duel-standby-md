@@ -144,7 +144,8 @@ test('.help <command> menampilkan detail command', async () => {
   const { out, db, dir } = await render(['sticker']);
 
   assert.match(out, /\*STICKER\*/);
-  assert.match(out, /📄 File: tools-sticker\.js/);
+  assert.doesNotMatch(out, /📄 File: /, 'nama file plugin tidak boleh bocor ke user');
+  assert.doesNotMatch(out, /tools-sticker\.js/, 'nama file plugin tidak boleh tampil di help');
   assert.match(out, /⌨️ Alias: sticker, stiker, s/);
   assert.match(out, /💳 Limit: /);
   assert.match(out, /💡 Contoh: \.sticker/);
