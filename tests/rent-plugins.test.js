@@ -9,6 +9,7 @@ import { handleMessage } from '../handler.js';
 import { Database } from '../lib/database.js';
 import { PluginManager } from '../lib/plugins.js';
 import * as Rent from '../lib/rent.js';
+import rentGuard from '../plugins/_rent-guard.js';
 
 const pluginsDir = path.resolve(import.meta.dirname, '..', 'plugins');
 const quiet = { warn() {}, error() {}, info() {}, debug() {} };
@@ -128,4 +129,61 @@ test('handler.all: teks DM dari user dengan pending rental diteruskan ke owner (
   assert.match(forwarded.content.text, /sudah transfer ya bang/);
   assert.equal(r.handled, false); // bukan command -> hook all (tidak diproses sebagai command)
   t.db.close();
+});
+
+// ── _rent-guard: tawaran saat bot ditambahkan ─────────────────────────────
+
+function guardCtx({ dir, enabled = true }) {
+  const qrisPath = path.join(dir, 'qris.jpg');
+  fs.writeFileSync(qrisPath, Buffer.from('qris-placeholder'));
+  const sent = [];
+  const conn = {
+    user: { id: '628999@s.whatsapp.net' },
+    sendMessage: async (chat, content) => {
+      sent.push({ chat, content });
+      return { key: { id: `M${sent.length}` } };
+    },
+  };
+  const config = {
+    ...baseConfig,
+    root: dir,
+    bot: { ...baseConfig.bot, prefix: ['.'] },
+    rent: { ...baseConfig.rent, enabled, qrisFile: 'qris.jpg' },
+  };
+  return { conn, sent, config };
+}
+
+test('_rent-guard: bot ditambahkan -> tawaran + QRIS ke penambah', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rtxzy-guard-'));
+  const { conn, sent, config } = guardCtx({ dir });
+  const update = {
+    id: '123@g.us',
+    action: 'add',
+    participants: ['628999@s.whatsapp.net'],
+    author: '628111@s.whatsapp.net',
+  };
+  await rentGuard.onGroupParticipants(conn, update, { groupMetadata: { subject: 'Grup Uji' }, config });
+  const msg = sent.find((s) => s.chat === '628111@s.whatsapp.net');
+  assert.ok(msg, 'penambah harus dapat pesan');
+  assert.ok(msg.content.image, 'QRIS ikut terkirim');
+  assert.match(String(msg.content.caption || ''), /sewa/i);
+});
+
+test('_rent-guard: remove / tanpa author / bukan bot -> tidak ada kiriman', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rtxzy-guard-'));
+  const { conn, sent, config } = guardCtx({ dir });
+
+  await rentGuard.onGroupParticipants(conn, { id: 'x', action: 'remove', participants: ['628999@s.whatsapp.net'], author: '628111@s.whatsapp.net' }, { groupMetadata: {}, config });
+  assert.equal(sent.length, 0, 'action remove tidak boleh kirim');
+
+  await rentGuard.onGroupParticipants(conn, { id: 'x', action: 'add', participants: ['628999@s.whatsapp.net'], author: '' }, { groupMetadata: {}, config });
+  assert.equal(sent.length, 0, 'tanpa author tidak boleh kirim');
+
+  await rentGuard.onGroupParticipants(conn, { id: 'x', action: 'add', participants: ['628888@s.whatsapp.net'], author: '628111@s.whatsapp.net' }, { groupMetadata: {}, config });
+  assert.equal(sent.length, 0, 'bukan bot yang ditambahkan tidak boleh kirim');
+
+  // fitur dimatikan
+  const off = guardCtx({ dir, enabled: false });
+  await rentGuard.onGroupParticipants(off.conn, { id: 'x', action: 'add', participants: ['628999@s.whatsapp.net'], author: '628111@s.whatsapp.net' }, { groupMetadata: {}, config: off.config });
+  assert.equal(off.sent.length, 0, 'rent disabled tidak boleh kirim');
 });
