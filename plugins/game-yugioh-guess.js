@@ -14,6 +14,7 @@
  */
 import { ensureQuiz } from '../lib/quiz-instance.js';
 import { consumeLimit } from '../lib/permissions.js';
+import { cleanJid } from '../lib/functions.js';
 
 const handler = async (m, { conn, args, config, db, user, isAdmin, isOwner, command, usedPrefix }) => {
   const engine = ensureQuiz(conn, config, db);
@@ -87,8 +88,12 @@ const handler = async (m, { conn, args, config, db, user, isAdmin, isOwner, comm
 };
 
 /**
- * Hook: setiap pesan di chat yang sedang ada game dianggap sebagai tebakan.
- * Pesan ber-prefix dibiarkan lewat supaya tetap diproses sebagai command.
+ * Hook: setiap pesan di chat yang sedang ada game dianggap sebagai tebakan —
+ * TAPI hanya kalau di-ARAHKAN ke game:
+ *   - reply/quote pesan bot (mis. gambar soal), atau
+ *   - men-tag/mention bot.
+ * Chat biasa (ngobrol tanpa reply/tag) dibiarkan lewat supaya tidak kena
+ * balasan "❌ Salah". Di DM (japri 1-on-1) teks polos tetap diterima.
  */
 handler.before = async (m, { conn, config, db }) => {
   if (!m.text || m.fromMe) return true;
@@ -97,6 +102,15 @@ handler.before = async (m, { conn, config, db }) => {
 
   const engine = ensureQuiz(conn, config, db);
   if (!engine.has(m.chat)) return true;
+
+  // DM: hanya percakapan dengan bot, tidak ada gaduh -> teks polos boleh menebak.
+  const isGroup = m.isGroup !== false;
+  if (isGroup) {
+    const botJid = conn?.user?.id ? cleanJid(conn.user.id) : '';
+    const quotedBot = Boolean(m.quoted?.fromMe && (!m.quoted.chat || cleanJid(m.quoted.chat) === cleanJid(m.chat)));
+    const taggedBot = Boolean(botJid && (m.mentionedJid || []).some((jid) => cleanJid(jid) === botJid));
+    if (!quotedBot && !taggedBot) return true; // bukan tebakan terarah -> biarkan chat biasa
+  }
 
   const result = await engine.handleGuess(m.chat, {
     sender: m.sender,

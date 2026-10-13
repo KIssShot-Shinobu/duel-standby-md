@@ -409,10 +409,17 @@ test('plugin: perintah .tebakygo, hook tebakan, .stoptebak, dan .yugoscore', asy
   assert.match(sent.find((item) => item.image).image.url, /cards_cropped/);
   assert.equal(sent.find((item) => item.image).caption.includes('Kuriboh'), false, 'nama bocor di caption');
 
-  // hook: pesan biasa yang bukan pilihan tidak dianggap tebakan
+  // hook: chat biasa (tanpa reply/tag) TIDAK dianggap tebakan -> tidak ada balasan
+  const nBefore = sent.length;
   assert.equal(await guessPlugin.before(m('halo semua'), ctx()), true);
-  // hook: huruf pilihan dianggap tebakan -> pemrosesan pesan dihentikan
-  assert.equal(await guessPlugin.before(m('A'), ctx()), false);
+  assert.equal(sent.length, nBefore, 'chat biasa tidak boleh memicu balasan');
+
+  // hook: huruf pilihan yang di-ARAHKAN (mention bot) dianggap tebakan
+  const directed = (text) => ({ ...m(text), mentionedJid: ['628999@s.whatsapp.net'] });
+  assert.equal(await guessPlugin.before(directed('A'), ctx()), false);
+
+  // hook: huruf pilihan yang di-ARAHKAN (reply pesan bot) juga diterima
+  assert.equal(await guessPlugin.before({ ...m('A'), quoted: { fromMe: true, chat: '123@g.us' } }, ctx()), false);
 
   await guessPlugin(m('.stoptebak'), { ...ctx(), command: 'stoptebak' });
   await guessPlugin(m('.yugoscore'), { ...ctx(), command: 'yugoscore' });
