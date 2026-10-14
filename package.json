@@ -1,5 +1,5 @@
 {
-  "name": "rtxzy-md-clean",
+  "name": "duel-standby-md",
   "version": "1.3.0",
   "description": "Clean-room WhatsApp Multi-Device bot (Baileys) dengan arsitektur plugin bergaya RTXZY-MD",
   "type": "module",

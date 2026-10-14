@@ -70,11 +70,11 @@ export default handler
 
 ## 4. Keputusan: tulis ulang bersih (clean-room)
 
-Dibangun **`rtxzy-md-clean/`** — bukan salinan kode, tetapi **kompatibel kontrak plugin** supaya plugin gaya RTXZY mudah diadaptasi.
+Dibangun **`duel-standby-md/`** — bukan salinan kode, tetapi **kompatibel kontrak plugin** supaya plugin gaya RTXZY mudah diadaptasi.
 
 ### Pemetaan upstream → rebuild
 
-| Aspek | RTXZY-MD (upstream) | `rtxzy-md-clean` (rebuild) |
+| Aspek | RTXZY-MD (upstream) | `duel-standby-md` (rebuild) |
 |---|---|---|
 | Library WA | `zapo-js` (ekosistem kecil) | **`@whiskeysockets/baileys` 6.7.24** (dist-tag *legacy*, sudah dipatch untuk advisory GHSA-qvv5-jq5g-4cgg) |
 | Inti koneksi | `main.js` **obfuscated** | `lib/connection.js` + `lib/serialize.js` + `lib/simple.js`, semua terbaca |

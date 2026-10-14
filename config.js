@@ -11,6 +11,7 @@ import './lib/env.js';
 import { env, envNumber, envList } from './lib/env.js';
 import { parseArgv, flagEnabled } from './lib/argv.js';
 import { DEFAULT_BLOCKED_TAGS } from './lib/image-source.js';
+import { SHINOBU_PERSONA } from './lib/shinobu-persona.js';
 
 const ROOT = path.resolve(import.meta.dirname);
 const { flags, positionals } = parseArgv();
@@ -32,7 +33,7 @@ export const config = {
   startedAt: Date.now(),
 
   bot: {
-    name: env('BOT_NAME', 'RTXZY Clean'),
+    name: env('BOT_NAME', 'Duel Standby'),
     ownerName: env('OWNER_NAME', 'Owner'),
     /** Setiap karakter menjadi prefix tersendiri, sama seperti RTXZY-MD */
     prefix: [...new Set(prefixSource.split(''))],
@@ -42,7 +43,7 @@ export const config = {
     modsJids: toJids(mods),
     premiumJids: toJids(premiums),
     mode: flags.self ? 'self' : 'public',
-    packname: env('STICKER_PACKNAME', 'RTXZY Clean'),
+    packname: env('STICKER_PACKNAME', 'Duel Standby'),
     author: env('STICKER_AUTHOR', 'Bot WhatsApp'),
     thumbnail: env('BOT_THUMBNAIL', ''),
     timezone: env('TIMEZONE', 'Asia/Jakarta'),
@@ -105,6 +106,16 @@ export const config = {
     base: env('AI_BASE', 'https://api.openai.com/v1'),
     key: env('AI_KEY', ''),
     model: env('AI_MODEL', 'gpt-4o-mini'),
+    /** Perilaku khusus AI untuk OWNER (reply/tag bot -> jawab sebagai waifu) */
+    ownerEnabled: env('AI_OWNER_ENABLED', 'true') !== 'false',
+    /** Model khusus owner (kosong = pakai ai.model) */
+    ownerModel: env('AI_OWNER_MODEL', ''),
+    /** Panjang riwayat yang diingat untuk percakapan owner */
+    ownerHistory: envNumber('AI_OWNER_HISTORY', 50),
+    /** File penyimpanan memori owner (terpisah dari database utama) */
+    ownerFile: env('AI_OWNER_FILE', path.join('database', 'owner-ai.json')),
+    /** Sistem prompt persona owner (default = Oshino Shinobu) */
+    ownerPersona: env('AI_OWNER_PERSONA', SHINOBU_PERSONA),
   },
 
   /** Yu-Gi-Oh! API (YGOPRODeck) â€” gratis, tanpa API key */
@@ -208,6 +219,34 @@ export const config = {
     dailyCap: envNumber('BUY_LIMIT_DAILY_CAP', 60),
     /** batas total pembelian per bulan kalender */
     monthlyCap: envNumber('BUY_LIMIT_MONTHLY_CAP', 300),
+  },
+
+  /**
+   * Sewa bot per grup (fitur rent).
+   * Grup tanpa sewa aktif terkunci kecuali plugin free (yugioh & stiker)
+   * dan main-*. Harga bisa di-override per menit lewat `.rent price` (tersimpan
+   * di db.settings.rentPrice).
+   */
+  rent: {
+    enabled: env('RENT_ENABLED', 'true') !== 'false',
+    /** durasi sewa 1 bulan = 30 hari */
+    days: envNumber('RENT_DAYS', 30),
+    /** harga sewa per bulan; 0 = owner set lewat `.rent price` */
+    pricePerMonth: envNumber('RENT_PRICE', 0),
+    /** gambar QRIS untuk pembayaran (relatif config.root, diganti owner) */
+    qrisFile: env('RENT_QRIS', 'assets/qris.jpg'),
+    /** nomor (tanpa +) untuk link DM bantuan sewa yang tampil di menu rent */
+    helpNumber: env('RENT_HELP_NUMBER', '628970080509'),
+    /** H-berapa sebelum expired bot mengingatkan penyewa (sekali per periode) */
+    reminderDays: envList('RENT_REMINDER_DAYS', ['3', '1']).map((x) => Number(x)),
+    /** plugin yang selalu free (prefix nama file plugin) */
+    freePlugins: ['game-yugioh', 'tools-sticker', 'sticker-', 'tools-toimg'],
+    /** plugin yang tidak pernah dikunci */
+    alwaysAllowed: ['main-', 'owner-', 'rent.js', '_rent-guard'],
+    /** pesan saat command terkunci karena grup tidak punya sewa aktif */
+    gatedMessage: env('RENT_GATED_MSG', '🔒 Fitur ini butuh sewa aktif. Ketik `.rent` untuk menyewa.'),
+    /** seberapa sering sweep cek expired/reminder */
+    sweepIntervalMs: 6 * 60 * 60 * 1000,
   },
 
   /** Hadiah tiap pesan chat (XP & saldo acak) */

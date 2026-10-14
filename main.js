@@ -13,7 +13,9 @@ import { initDatabase } from './lib/database.js';
 import { PluginManager } from './lib/plugins.js';
 import { createApi } from './lib/api.js';
 import { createConnection } from './lib/connection.js';
+import * as Rent from './lib/rent.js';
 import { startHealthServer, writeStatus } from './lib/health.js';
+import { getOwnerMemory } from './lib/owner-ai.js';
 import { hasFfmpeg, hasYtDlp } from './lib/media.js';
 import { backupSessionDir } from './lib/session.js';
 import { dispatchCall, dispatchGroupParticipants, dispatchGroupsUpdate, handleMessage } from './handler.js';
@@ -154,6 +156,26 @@ clearTmp();
 setInterval(clearTmp, 10 * 60 * 1000).unref?.();
 setInterval(() => publishStatus(), 15000).unref?.();
 
+// ── Sweep sewa berkala: tandai expired + kirim reminder ke penyewa ──────
+// (tidak ada aksi keluar grup — expired = fitur dikunci lewat gating handler)
+if (config.rent?.enabled !== false) {
+  setInterval(async () => {
+    const socket = globalThis.conn;
+    if (!socket) return;
+    const plan = Rent.sweepRentals(db, config);
+    for (const jid of plan.expired) logger.info(`[rent] sewa expired: ${jid}`);
+    for (const item of plan.remind) {
+      try {
+        await socket.sendMessage(item.renterJid, {
+          text: `⏳ Sewa grup tersisa ${item.remaining} hari. Perpanjang: ${config.bot.prefix[0]}renew ${item.jid}`,
+        });
+      } catch {
+        /* DM bisa gagal — tidak apa-apa */
+      }
+    }
+  }, config.rent.sweepIntervalMs).unref?.();
+}
+
 // ── Mode tanpa koneksi (smoke test / cek instalasi) ─────────────────────
 if (config.flags.noConnect) {
   print.warn('Mode --no-connect: bot tidak menyambung ke WhatsApp.');
@@ -273,6 +295,12 @@ if (config.flags.noConnect) {
       await connection.stop();
       await db.save(true);
       db.close();
+      // Simpan memori AI owner yang mungkin masih menunggu debounce.
+      try {
+        getOwnerMemory(config).flush();
+      } catch {
+        /* opsional */
+      }
       publishStatus({ event: 'shutdown', signal });
     } finally {
       process.exit(0);

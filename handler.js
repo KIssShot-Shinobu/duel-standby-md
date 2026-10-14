@@ -15,6 +15,7 @@ import { errorLog, errorText, isFriendlyError } from './lib/errors.js';
 import { categoryState, commandState, isAdultCategory } from './lib/menu-config.js';
 import { resolveLimit } from './lib/limit-config.js';
 import print from './lib/print.js';
+import * as Rent from './lib/rent.js';
 
 /** Pisahkan prefix, nama command dan argumen dari teks pesan. */
 export function parseCommand(text = '', prefixes = ['.']) {
@@ -285,6 +286,13 @@ export async function handleMessage(conn, raw, deps) {
   if (chat.mute && !isOwner && !isAdmin) return { handled: false, reason: 'muted', reward };
   if (chat.expired && Date.now() > chat.expired && !isOwner) return { handled: false, reason: 'expired-chat', reward };
 
+  // Gating sewa: grup tanpa sewa aktif terkunci (kecuali plugin free / main /
+  // grup owner). Lihat lib/rent.js untuk daftar plugin yang dikecualikan.
+  if (isGroup && Rent.isGroupGated(db, m.chat, entry.name, config, { participants, isOwner })) {
+    await m.reply(Rent.rentSettings(db, config).gatedMessage).catch(() => {});
+    return { handled: false, reason: 'rent-gated', reward };
+  }
+
   const plugin = entry.plugin;
   if (plugin.owner && !isOwner) {
     await m.reply(config.messages.owner).catch(() => {});
@@ -320,7 +328,10 @@ export async function handleMessage(conn, raw, deps) {
   ctx.limitCost = limitInfo.cost;
   ctx.limitMode = limitInfo.mode;
 
-  const limit = Perm.consumeLimitCost(db, user, limitInfo.cost, config);
+  // Biaya limit: penyewa aktif (unlimited global) dilewati.
+  const limit = Rent.isRenterActive(db, m.sender, config)
+    ? { ok: true, limit: Number.MAX_SAFE_INTEGER, cost: limitInfo.cost }
+    : Perm.consumeLimitCost(db, user, limitInfo.cost, config);
   if (!limit.ok) {
     await m.reply(config.messages.limit).catch(() => {});
     return { handled: false, reason: 'no-limit', reward };

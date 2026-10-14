@@ -68,7 +68,6 @@ const handler = async (m, { conn, plugins, config, db, usedPrefix, args, isOwner
     const text = [
       `📋 *${names[0]?.toUpperCase() || query.toUpperCase()}*`,
       '',
-      `📄 File: ${entry.name}`,
       `🏷️ Kategori: ${categoryLabel(entry.category)}`,
       `⌨️ Alias: ${names.join(', ') || '(tidak ada)'}`,
       `💳 Limit: ${formatLimitInfo(limit)}`,

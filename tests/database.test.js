@@ -50,6 +50,37 @@ test('database: simpan -> muat ulang (roundtrip)', async () => {
   second.close();
 });
 
+test('database: section rentals & renters terpisah dari users, survive roundtrip', async () => {
+  const dir = tmpDir();
+  const file = path.join(dir, 'database.json');
+
+  const first = new Database(file, { saveInterval: 5, logger: { warn() {}, error() {} } });
+  first.load();
+
+  // selalu objek setelah load, walau file kosong
+  assert.equal(typeof first.data.rentals, 'object');
+  assert.equal(typeof first.data.renters, 'object');
+  assert.notEqual(first.data.rentals, first.data.users);
+  assert.notEqual(first.data.renters, first.data.users);
+
+  first.data.rentals['123@g.us'] = {
+    status: 'active',
+    renter: '628111@s.whatsapp.net',
+    startedAt: 1,
+    expiresAt: 999,
+    history: [],
+  };
+  first.data.renters['628111@s.whatsapp.net'] = { since: 1, name: 'Budi', groups: ['123@g.us'] };
+  await first.save(true);
+  first.close();
+
+  const second = new Database(file, { saveInterval: 5, logger: { warn() {}, error() {} } });
+  second.load();
+  assert.equal(second.data.rentals['123@g.us'].status, 'active');
+  assert.equal(second.data.renters['628111@s.whatsapp.net'].name, 'Budi');
+  second.close();
+});
+
 test('database: file rusak tidak menghapus data (dibackup .corrupt)', () => {
   const dir = tmpDir();
   const file = path.join(dir, 'database.json');

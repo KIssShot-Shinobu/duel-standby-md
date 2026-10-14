@@ -1,4 +1,4 @@
-# 🜲 RTXZY-MD Clean
+# 🜲 Duel Standby-MD
 
 Bot **WhatsApp Multi-Device** yang ditulis ulang dari nol (clean-room) dengan arsitektur plugin bergaya **RTXZY-MD / wabot-aq**, tapi memakai library resmi komunitas **[@whiskeysockets/baileys](https://github.com/WhiskeySockets/Baileys)** dan kode yang **100% bisa dibaca** (tanpa obfuscate, tanpa API key wajib).
 
@@ -192,8 +192,8 @@ Lihat [`.env.example`](.env.example). Yang paling penting:
 OWNER_NUMBER="628123456789"     # wajib
 PAIRING_NUMBER="628123456789"   # untuk login pairing code
 PREFIX=".#!/,"
-BOT_NAME="RTXZY Clean"
-STICKER_PACKNAME="RTXZY Clean"
+BOT_NAME="Duel Standby"
+STICKER_PACKNAME="Duel Standby"
 API_BASE=""                     # opsional
 AI_BASE="https://api.openai.com/v1"
 AI_KEY=""                       # opsional, untuk plugin .ai
@@ -205,7 +205,7 @@ Semua output konsol memakai satu format supaya kolomnya lurus:
 
 ```text
 ────────────────────────────────────────────────────
-🜲 RTXZY Clean  v1.3.0
+🜲 Duel Standby  v1.3.0
 WhatsApp multi-device • Node 22.11.0 • zona waktu Asia/Jakarta
 ────────────────────────────────────────────────────
 21:32:25 OK   Mode        public • prefix ".#!/,"
@@ -251,7 +251,7 @@ Prefix default: `.#!/,` (mis. `.menu`, `!ping`).
 Ringkasannya hanya memuat **nama utama** tiap plugin (bukan semua alias), dibungkus beberapa kolom, dengan satu baris kosong antar kategori — dari 134 baris jadi ±54 baris:
 
 ```text
-╭─「 *RTXZY Clean* 」v1.3.0
+╭─「 *Duel Standby* 」v1.3.0
 │ 👤 Owner
 │ 🕒 12 Okt 2026 · 22.42
 │ 🔑 Prefix : . # ! / ,

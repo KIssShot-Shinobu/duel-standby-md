@@ -269,7 +269,13 @@ async function e2eSetup() {
     messageTimestamp: Math.floor(Date.now() / 1000),
     pushName: 'Tester',
   });
-  const config = { ...baseConfig, images: { ...baseConfig.images, cacheDir: '' } };
+  // Konteks test ini adalah toggle/gambar NSFW, bukan sewa — matikan gating
+  // rent supaya perilaku kategori tidak berubah.
+  const config = {
+    ...baseConfig,
+    rent: { ...baseConfig.rent, enabled: false },
+    images: { ...baseConfig.images, cacheDir: '' },
+  };
   return { db, plugins, conn, sent, msg, config, dir, groupCache: createGroupCache(60) };
 }
 
