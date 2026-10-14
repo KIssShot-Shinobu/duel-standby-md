@@ -48,4 +48,3 @@ handler.before = async (m, ctx) => {
 };
 
 export default handler;
-EOF

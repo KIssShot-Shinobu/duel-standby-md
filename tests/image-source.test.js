@@ -115,6 +115,24 @@ test('mode SFW memakai nekos.best dan membawa atribusi artist', async () => {
   assert.equal(item.rating, 'safe');
 });
 
+test('SFW melewati provider yang hasilnya sudah dipakai agar tidak mengulang gambar', async () => {
+  clearListCache();
+  const fetchImpl = makeFetch({
+    'nekos.best/api/v2/neko': {
+      results: [{ url: 'https://nekos.best/api/v2/neko/repeated.png', artist_name: 'Artist A' }],
+    },
+    'danbooru.donmai.us/posts.json': [{ ...DANBOORU_POST, id: 777 }],
+  });
+  const config = imageConfig({ providers: { nsfw: [], sfw: ['nekosbest', 'danbooru'] } });
+
+  const first = await fetchImage({ mode: 'sfw', config, fetchImpl });
+  const second = await fetchImage({ mode: 'sfw', config, fetchImpl, avoid: new Set([first.id]) });
+
+  assert.equal(first.provider, 'nekosbest');
+  assert.equal(second.provider, 'danbooru');
+  assert.notEqual(second.id, first.id);
+});
+
 test('provider yang gagal otomatis jatuh ke provider berikutnya', async () => {
   clearListCache();
   const fetchImpl = makeFetch({
