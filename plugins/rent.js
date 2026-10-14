@@ -9,8 +9,8 @@
  *   (di DM) kirim bukti bayar     -> diteruskan ke owner (handler.all)
  *
  * Owner (subcommand .rent):
- *   .rent approve <grup> [hari]   .rent reject <grup> [alasan]
- *   .rent add <grup> [hari]       .rent del <grup>
+ *   .rent approve <grup> [nomor penyewa] [hari]   .rent reject <grup> [alasan]
+ *   .rent add <grup> [nomor penyewa] [hari]       .rent del <grup>
  *   .rent list                    .rent price <nominal>
  *   .grouplist                    -> daftar semua grup bot + status sewa
  *
@@ -19,7 +19,7 @@
  */
 import fs from 'node:fs';
 import { userError } from '../lib/errors.js';
-import { bareNumber } from '../lib/functions.js';
+import { bareNumber, cleanJid, isJidUser, NUMBER_ARG, toJid } from '../lib/functions.js';
 import * as Rent from '../lib/rent.js';
 
 const OWNER_SUBS = ['approve', 'reject', 'add', 'del', 'list', 'price'];
@@ -190,7 +190,24 @@ async function handleOwner(m, ctx, sub, args) {
   }
 
   const target = args[1] || '';
-  const days = Number(args[2]) || config.rent.days || 30;
+
+  // Format baru: `.rent approve|add <grup> <nomor penyewa> [hari]`.
+  // Nomor penyewa opsional; angka 1-4 digit tetap dibaca sebagai durasi.
+  let renter = '';
+  let daysArg = '';
+  const renterOrDays = String(args[2] || '').trim();
+  if (renterOrDays && !/^\d{1,4}$/.test(renterOrDays)) {
+    const normalized = renterOrDays.replace(/^@/, '');
+    if (NUMBER_ARG.test(renterOrDays) || (normalized.includes('@') && isJidUser(cleanJid(normalized)))) {
+      renter = toJid(renterOrDays);
+      daysArg = args[3] || '';
+    } else {
+      daysArg = renterOrDays;
+    }
+  } else {
+    daysArg = renterOrDays;
+  }
+  const days = Number(daysArg) || config.rent.days || 30;
 
   if (sub === 'del') {
     const resolved = await normalize(target);
@@ -203,17 +220,28 @@ async function handleOwner(m, ctx, sub, args) {
   if (!resolved?.jid) throw userError('Grup tidak ditemukan. Sebut id/nama/link grup.');
 
   if (sub === 'approve' || sub === 'add') {
-    const existing = Rent.getRental(db, resolved.jid);
-    Rent.activateRent(db, resolved.jid, {
-      renter: existing?.renter || '',
-      renterName: existing?.renterName || '',
+    const current = Rent.getRental(db, resolved.jid);
+    const renterJid = renter || current?.renter || '';
+    const lookedUpName = renterJid && conn.getName ? await Promise.resolve(conn.getName(renterJid)).catch(() => '') : '';
+    const renterName = renterJid
+      ? current?.renter === renterJid && current?.renterName
+        ? current.renterName
+        : lookedUpName || ''
+      : '';
+    const activated = Rent.activateRent(db, resolved.jid, {
+      renter: renterJid,
+      renterName,
       days,
       by: m.sender,
       now: Date.now(),
     });
     const until = new Date(Date.now() + days * 86400000).toLocaleDateString('id-ID');
-    if (existing?.status === 'pending') {
-      await conn.sendMessage(existing.renter, { text: `✅ Sewa *grup-mu* disetujui owner. Aktif ${days} hari (s.d. ${until}).` }).catch(() => {});
+    if (activated.renter) {
+      await conn
+        .sendMessage(activated.renter, {
+          text: `✅ Sewa *${resolved.subject || resolved.jid}* aktif. Durasi ${days} hari (s.d. ${until}). Kamu sekarang terdaftar sebagai penyewa dan mendapat akses tanpa limit.`,
+        })
+        .catch(() => {});
     }
     return m.reply(`✅ Sewa *${resolved.subject || resolved.jid}* aktif ${days} hari (s.d. ${until}).`);
   }
@@ -224,7 +252,7 @@ async function handleOwner(m, ctx, sub, args) {
     return m.reply(`❌ Sewa *${resolved.subject || resolved.jid}* ditolak. Alasan: ${reason}`);
   }
 
-  return m.reply(`Subcommand: ${p}rent approve|reject|add|del|list|price`);
+  return m.reply(`Subcommand: ${p}rent approve|reject|add|del|list|price\nApprove/add: <id grup> [nomor penyewa] [hari]`);
 }
 
 /**

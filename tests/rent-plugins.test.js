@@ -124,6 +124,75 @@ test('owner .rent add <jid @g.us>: aktif meski pakai JID eksplisit', async () =>
   t.db.close();
 });
 
+test('owner .rent add mencatat penyewa, memberi manfaat renter, dan mengirim DM', async () => {
+  const t = await setup({ owners: ['628111'] });
+  const renter = '628222333444';
+  const r = await handleMessage(t.conn, dmMsg(`.rent add ${ID} ${renter} 30`, '628111@s.whatsapp.net'), {
+    plugins: t.plugins,
+    db: t.db,
+    config: t.config,
+    logger: quiet,
+  });
+
+  assert.equal(r.handled, true);
+  assert.equal(Rent.getRental(t.db, GROUP).renter, `${renter}@s.whatsapp.net`);
+  assert.ok(t.db.data.renters[`${renter}@s.whatsapp.net`], 'registry renter harus dibuat');
+  assert.equal(Rent.isRenterActive(t.db, `${renter}@s.whatsapp.net`), true);
+  assert.ok(t.sent.some((s) => s.chat === `${renter}@s.whatsapp.net` && /disetujui|aktif/i.test(s.content?.text || '')));
+  t.db.close();
+});
+
+test('owner .rent approve dengan nomor penyewa mencatat renter dan mengirim DM', async () => {
+  const t = await setup({ owners: ['628111'] });
+  const renter = '628222333444';
+  const r = await handleMessage(t.conn, dmMsg(`.rent approve ${ID} ${renter} 30`, '628111@s.whatsapp.net'), {
+    plugins: t.plugins,
+    db: t.db,
+    config: t.config,
+    logger: quiet,
+  });
+
+  assert.equal(r.handled, true);
+  assert.equal(Rent.getRental(t.db, GROUP).renter, `${renter}@s.whatsapp.net`);
+  assert.equal(Rent.isRenterActive(t.db, `${renter}@s.whatsapp.net`), true);
+  assert.ok(t.sent.some((s) => s.chat === `${renter}@s.whatsapp.net` && /disetujui|aktif/i.test(s.content?.text || '')));
+  t.db.close();
+});
+
+test('owner approve tanpa nomor tetap bisa mengaktifkan grup-only', async () => {
+  const t = await setup({ owners: ['628111'] });
+  const r = await handleMessage(t.conn, dmMsg(`.rent approve ${ID} 30`, '628111@s.whatsapp.net'), {
+    plugins: t.plugins,
+    db: t.db,
+    config: t.config,
+    logger: quiet,
+  });
+
+  assert.equal(r.handled, true);
+  assert.equal(Rent.rentalStatus(t.db, GROUP), 'active');
+  assert.equal(Rent.getRental(t.db, GROUP).renter, '');
+  assert.equal(t.sent.some((s) => s.chat.endsWith('@s.whatsapp.net') && s.chat !== '628111@s.whatsapp.net'), false);
+  t.db.close();
+});
+
+test('approve tanpa nomor memakai renter pending dan mengirim DM konfirmasi', async () => {
+  const t = await setup({ owners: ['628111'] });
+  const renter = '628222333444@s.whatsapp.net';
+  Rent.requestRent(t.db, GROUP, { renter, renterName: 'Penyewa' });
+
+  const r = await handleMessage(t.conn, dmMsg(`.rent approve ${ID} 30`, '628111@s.whatsapp.net'), {
+    plugins: t.plugins,
+    db: t.db,
+    config: t.config,
+    logger: quiet,
+  });
+
+  assert.equal(r.handled, true);
+  assert.equal(Rent.getRental(t.db, GROUP).renter, renter);
+  assert.ok(t.sent.some((s) => s.chat === renter && /disetujui|aktif/i.test(s.content?.text || '')));
+  t.db.close();
+});
+
 test('.grouplist (owner): daftar grup + status; non-owner ditolak', async () => {
   const owner = await setup({ owners: ['628111'] });
   await Rent.activateRent(owner.db, GROUP, { renter: '628111@s.whatsapp.net', renterName: 'T', days: 30, by: 'owner', now: Date.now() });

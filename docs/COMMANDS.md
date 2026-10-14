@@ -82,7 +82,7 @@
 | `.info`, `.profile`, `.profil`, `.daftar` | — | `main-info.js` |
 | `.menu`, `.help`, `.bantuan` | — | `main-menu.js` |
 | `.ping`, `.speed` | — | `main-ping.js` |
-| `.rent`, `.sewa`, `.rentstatus`, `.renew`, `.grouplist` | — | `rent.js` |
+| `.rent`, `.sewa`, `.rentstatus`, `.renew`, `.grouplist` | Owner: `.rent approve|add <id grup> [nomor penyewa] [hari]`; nomor opsional untuk group-only | `rent.js` |
 
 ## nsfw
 
@@ -131,4 +131,3 @@
 | _(event otomatis)_ | — | `_antispam.js` |
 | _(event otomatis)_ | — | `_rent-guard.js` |
 | _(event otomatis)_ | — | `_welcome.js` |
-
