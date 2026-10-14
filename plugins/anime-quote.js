@@ -39,7 +39,7 @@ const handler = async (m, ctx) => {
     anime = args.join(' ').trim();
   }
 
-  await m.reply('⏳ Mengambil kutipan anime...').catch(() => {});
+  await m.react('⏳').catch(() => {});
 
   let data;
   try {
