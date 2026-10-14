@@ -15,7 +15,7 @@ import { formatLimitInfo, resolveLimit } from '../lib/limit-config.js';
 import { commandList, joinLines, userName } from '../lib/messages.js';
 
 /** Urutan kategori yang enak dibaca; sisanya alfabetis. */
-const CATEGORY_ORDER = ['main', 'owner', 'group', 'tools', 'downloader', 'fun', 'ai', 'rpg', 'game', 'image', 'nsfw', 'info', 'event'];
+const CATEGORY_ORDER = ['main', 'owner', 'group', 'tools', 'downloader', 'fun', 'reaction', 'ai', 'rpg', 'game', 'image', 'nsfw', 'info', 'event'];
 
 const RULE = '─'.repeat(24);
 

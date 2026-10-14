@@ -196,7 +196,7 @@ const handler = async (m, { conn, text, args, command, usedPrefix, config }) => 
 };
 
 handler.help = [...Object.keys(REACTION_MAP).filter((v, i, a) => a.indexOf(v) === i), 'reactionlist'];
-handler.tags = ['fun'];
+handler.tags = ['reaction'];
 handler.command = new RegExp(`^(${Object.keys(REACTION_MAP).join('|')}|reactionlist)$`, 'i');
 handler.limit = true;
 
