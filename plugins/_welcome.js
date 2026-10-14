@@ -55,8 +55,6 @@ function buildFooter(config, db) {
     '─'.repeat(26),
     '📖 *Penggunaan bot:*',
     `• Ketik ${p}menu untuk lihat semua fitur`,
-    `• Yu-Gi-Oh & stiker: GRATIS selalu`,
-    `• Fitur lain: butuh sewa aktif`,
     '',
     '🎫 *Penyewaan bot:*',
     price ? `• Harga: ${price} per ${s.days} hari` : null,

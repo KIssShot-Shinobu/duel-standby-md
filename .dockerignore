@@ -1,9 +1,0 @@
-node_modules
-sessions
-database
-tmp
-logs
-.git
-.env
-*.log
-tests
