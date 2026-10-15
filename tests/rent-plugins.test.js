@@ -20,6 +20,10 @@ async function setup({ owners = ['6289999999999'], sender = '628111@s.whatsapp.n
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rtxzy-rent-plug-'));
   const db = new Database(path.join(dir, 'db.json'), { saveInterval: 5000, logger: quiet });
   db.load();
+  // Intro DM (plugins/_dm-intro.js) otomatis menyapa user baru dan menempati
+  // posisi pertama di `sent`, sehingga helper reply() di bawah menangkap intro
+  // alih-alih jawaban command. Uji rent tidak menguji intro — matikan di sini.
+  db.user(sender).dmIntroSentAt = Date.now();
   const plugins = new PluginManager(pluginsDir, { logger: quiet });
   await plugins.loadAll();
 

@@ -196,6 +196,9 @@ test('xp & saldo dicatat di terminal saja (tidak ada pesan ke user)', async () =
   const capture = { ...quiet, info: (line) => logs.push(String(line)) };
   const sender = '628111@s.whatsapp.net';
   db.user(sender).exp = 0;
+  // Intro DM bukan bagian dari uji ini: ia menyapa user baru sekali dan akan
+  // terhitung sebagai "pesan ke user" padahal yang diuji adalah reward.
+  db.user(sender).dmIntroSentAt = Date.now();
 
   await handleMessage(conn, chatMessage('halo tanpa notifikasi'), { plugins, db, config, logger: capture });
 
@@ -227,6 +230,7 @@ test('naik level tidak dikirim ke chat secara default (hanya di terminal)', asyn
   const user = db.user(sender);
   user.exp = 99;
   user.level = 0;
+  user.dmIntroSentAt = Date.now(); // intro DM di luar lingkup uji ini
 
   await handleMessage(conn, chatMessage('mau naik level'), { plugins, db, config, logger: capture });
 
