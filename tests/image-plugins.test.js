@@ -367,3 +367,107 @@ test('E2E: admin menyalakan grup, grup lain tetap terkunci', async () => {
   db.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+// -- Dedup: jangan kirim gambar yang sama ------------------------------------
+
+test('.sfw berurutan dengan jeda singkat tidak mengulang gambar (provider acak tidak boleh di-cache)', async () => {
+  clearListCache();
+  const { default: sfwPlugin } = await import('../plugins/sfw-image.js');
+
+  // Seperti nekos.best asli: mengembalikan SATU gambar ACAK tiap panggilan.
+  const pool = ['a', 'b', 'c'];
+  let apiCall = 0;
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.includes('images.test')) return { ok: true, status: 200, arrayBuffer: async () => Buffer.from(target) };
+    if (target.includes('nekos.best')) {
+      const pick = pool[Math.min(apiCall, pool.length - 1)];
+      apiCall += 1;
+      return { ok: true, status: 200, text: async () => JSON.stringify({ results: [{ url: `https://images.test/${pick}.png` }] }) };
+    }
+    return { ok: false, status: 404, text: async () => '{}' };
+  };
+
+  const ctx = makeContext({ config: imageConfig({ providers: { nsfw: [], sfw: ['nekosbest'] } }) });
+  const run = () => sfwPlugin(ctx.m, { ...ctx, text: '', usedPrefix: '.', command: 'sfw' });
+
+  const id1 = await run();
+  await new Promise((resolve) => setTimeout(resolve, 60)); // "jeda sedikit"
+  const id2 = await run();
+
+  assert.equal(ctx.sent.length, 2);
+  assert.notEqual(id2, id1, `gambar sama terkirim lagi (${id1}) padahal provider sudah memberi gambar baru`);
+});
+
+test('.sfw bersamaan di chat yang sama tidak mengirim gambar sama (pilih + catat harus atomik)', async () => {
+  clearListCache();
+  const { default: sfwPlugin } = await import('../plugins/sfw-image.js');
+
+  // Daftar statis3 kandidat — kedua pemanggilan melihat kandidat yang sama.
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.includes('images.test')) return { ok: true, status: 200, arrayBuffer: async () => Buffer.from(target) };
+    if (target.includes('nekos.best')) {
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          results: ['x1', 'x2', 'x3'].map((n) => ({ url: `https://images.test/${n}.png` })),
+        }),
+      };
+    }
+    return { ok: false, status: 404, text: async () => '{}' };
+  };
+
+  const originalRandom = Math.random;
+  Math.random = () => 0; // pilihan deterministik: selalu kandidat pertama yang tersedia
+  try {
+    const ctx = makeContext({ config: imageConfig({ providers: { nsfw: [], sfw: ['nekosbest'] } }) });
+    const run = () => sfwPlugin(ctx.m, { ...ctx, text: '', usedPrefix: '.', command: 'sfw' });
+
+    const [id1, id2] = await Promise.all([run(), run()]);
+
+    assert.equal(ctx.sent.length, 2);
+    assert.notEqual(id2, id1, `dua perintah bersamaan mengirim gambar sama (${id1})`);
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+test('.sfw bersamaan di chat BERBEDA tidak mengirim gambar sama (riwayat dedup global)', async () => {
+  clearListCache();
+  const { default: sfwPlugin } = await import('../plugins/sfw-image.js');
+
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.includes('images.test')) return { ok: true, status: 200, arrayBuffer: async () => Buffer.from(target) };
+    if (target.includes('nekos.best')) {
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          results: ['y1', 'y2', 'y3'].map((n) => ({ url: `https://images.test/${n}.png` })),
+        }),
+      };
+    }
+    return { ok: false, status: 404, text: async () => '{}' };
+  };
+
+  const originalRandom = Math.random;
+  Math.random = () => 0;
+  try {
+    const cfg = imageConfig({ providers: { nsfw: [], sfw: ['nekosbest'] } });
+    const ctxA = makeContext({ config: cfg });
+    const ctxB = makeContext({ config: cfg });
+    ctxB.m = { ...ctxB.m, chat: '999@g.us' };
+
+    const [idA, idB] = await Promise.all([
+      sfwPlugin(ctxA.m, { ...ctxA, text: '', usedPrefix: '.', command: 'sfw' }),
+      sfwPlugin(ctxB.m, { ...ctxB, text: '', usedPrefix: '.', command: 'sfw' }),
+    ]);
+
+    assert.notEqual(idB, idA, `dua chat bersamaan menerima gambar sama (${idA})`);
+  } finally {
+    Math.random = originalRandom;
+  }
+});

@@ -14,24 +14,34 @@ import { downloadImage, fetchImage, findBlockedTags, listCategories, normalizeTa
 import { sendImageResult } from '../lib/media-send.js';
 import { userError } from '../lib/errors.js';
 
-/** Dedup per chat: simpan history 20 gambar terakhir supaya tidak repeat. */
-const lastSeen = new Map();
-const MAX_HISTORY = 20;
+/**
+ * Dedup GLOBAL (semua chat): 80 gambar terakhir yang dikirim bot.
+ * Dipakai global supaya dua chat yang memakai `.sfw` bersamaan juga tidak
+ * menerima gambar yang sama, dan riwayat tetap terlacak lintas chat.
+ */
+const recent = [];
+const MAX_HISTORY = 80;
 
-function getAvoidSet(chatId) {
-  const history = lastSeen.get(chatId);
-  if (!history) return new Set();
-  return new Set(history);
+function getAvoidSet() {
+  return new Set(recent);
 }
 
-function addToHistory(chatId, itemId) {
-  let history = lastSeen.get(chatId);
-  if (!history) {
-    history = [];
-    lastSeen.set(chatId, history);
-  }
-  history.push(itemId);
-  if (history.length > MAX_HISTORY) history.shift();
+function addToHistory(itemId) {
+  recent.push(itemId);
+  if (recent.length > MAX_HISTORY) recent.splice(0, recent.length - MAX_HISTORY);
+}
+
+/**
+ * Kunci serial untuk blok "pilih gambar + catat riwayat".
+ * Tanpa ini, dua perintah yang berjalan bersamaan (main.js memanggil
+ * handleMessage tanpa await) membaca snapshot `avoid` yang sama sebelum
+ * yang satu menulis riwayat -> keduanya memilih gambar identik.
+ */
+let pickQueue = Promise.resolve();
+function withPickLock(fn) {
+  const run = pickQueue.then(fn, fn);
+  pickQueue = run.then(() => {}, () => {});
+  return run;
 }
 
 const TAG_EXAMPLES = ['cat_ears', 'kimono', 'school_uniform', 'landscape', 'twintails'];
@@ -54,11 +64,16 @@ const handler = async (m, { conn, text, config, usedPrefix, command }) => {
 
   let item;
   try {
-    item = await fetchImage({ mode: 'sfw', query, config, avoid: getAvoidSet(m.chat) });
+    // Pilih + catat dalam satu blok serial (lihat withPickLock) supaya riwayat
+    // selalu berisi gambar yang baru saja dipilih, termasuk saat dipakai bersamaan.
+    item = await withPickLock(async () => {
+      const picked = await fetchImage({ mode: 'sfw', query, config, avoid: getAvoidSet() });
+      addToHistory(picked.id);
+      return picked;
+    });
   } catch (err) {
     throw userError(`❌ Gagal mengambil gambar.\n_${err.message}_`);
   }
-  addToHistory(m.chat, item.id);
 
   const buffer = await downloadImage(item, { config }).catch(() => null);
   if (!buffer) throw userError('❌ Gambar gagal diunduh. Coba lagi sebentar lagi.');
