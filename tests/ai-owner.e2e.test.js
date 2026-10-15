@@ -8,6 +8,7 @@ import baseConfig from '../config.js';
 import { handleMessage } from '../handler.js';
 import { Database } from '../lib/database.js';
 import { PluginManager } from '../lib/plugins.js';
+import { getQuiz } from '../lib/quiz-instance.js';
 
 const pluginsDir = path.resolve(import.meta.dirname, '..', 'plugins');
 const quiet = { warn() {}, error() {}, info() {}, debug() {} };
@@ -183,5 +184,132 @@ test('owner .ai eksplisit memakai persona waifu + memori owner', async () => {
   const file = path.join(t.dir, 'owner-ai.json');
   const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
   assert.equal(saved[OWNER].history[0].role, 'user');
+  t.db.close();
+});
+
+// ── Game tebak kartu × fitur AI owner ───────────────────────────────────────
+
+const GAME_CARD = {
+  id: 12345678,
+  name: 'Kuriboh',
+  type: 'Effect Monster',
+  attribute: 'DARK',
+  race: 'Fiend',
+  atk: 300,
+  def: 200,
+  archetype: 'Kuriboh',
+  card_images: [{ image_url_cropped: 'https://images.ygoprodeck.com/images/cards_cropped/12345678.jpg' }],
+};
+const GAME_DISTRACTORS = [
+  { ...GAME_CARD, id: 1, name: 'Winged Kuriboh' },
+  { ...GAME_CARD, id: 2, name: 'Kuribohrn' },
+  { ...GAME_CARD, id: 3, name: 'Kuribandit' },
+];
+
+/** Stub fetch untuk AI + YGOProDeck (mulai game) sekaligus. */
+function stubAIAndGame(answer = 'Hmph. AI aktif.') {
+  aiCalls = 0;
+  lastSystem = '';
+  globalThis.fetch = async (url, opts) => {
+    const target = String(url);
+    if (target.includes('/chat/completions')) {
+      aiCalls += 1;
+      lastSystem = JSON.parse(opts.body).messages[0].content;
+      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: answer } }] }) };
+    }
+    if (target.includes('randomcard.php')) {
+      return { ok: true, status: 200, text: async () => JSON.stringify({ data: [GAME_CARD] }) };
+    }
+    if (target.includes('cardinfo.php')) {
+      return { ok: true, status: 200, text: async () => JSON.stringify({ data: GAME_DISTRACTORS }) };
+    }
+    return { ok: true, status: 200, json: async () => ({}), text: async () => '{}' };
+  };
+}
+
+test('game aktif: balas soal dijawab GAME (bukan AI); balas pesan bot lain tetap dijawab AI', async () => {
+  const t = await setup();
+  stubAIAndGame();
+  t.config.ygoprodeck = { ...t.config.ygoprodeck, cacheFile: false };
+  t.config.game = {
+    ...t.config.game,
+    yugioh: { ...(t.config.game?.yugioh || {}), rounds: 3, timeoutMs: 30000, roundDelayMs: 0, maxAttempts: 3 },
+  };
+  const deps = { plugins: t.plugins, db: t.db, config: t.config, logger: quiet };
+
+  // 1) owner memulai game .tebakygo di grup
+  await handleMessage(t.conn, {
+    key: { remoteJid: 'o1@g.us', fromMe: false, id: `S${Math.random()}`, participant: OWNER },
+    message: { conversation: '.tebakygo' },
+    messageTimestamp: Math.floor(Date.now() / 1000),
+    pushName: 'Owner',
+  }, deps);
+  assert.match(aiText(t.sent), /TEBAK KARTU/, 'game harus mulai');
+
+  const state = getQuiz()?.get('o1@g.us');
+  assert.ok(state, 'state game aktif');
+  const questionId = [...state.questionIds][0];
+  assert.ok(questionId, 'id pesan soal tercatat');
+  const correct = state.choices.find((choice) => choice.correct).label;
+
+  // 2) owner BALAS PESAN SOAL dengan jawaban benar -> game yang menjawab, AI diam.
+  //    fromMe quoted sengaja false meniru kasus LID (participant quoted bukan id bot).
+  const before2 = t.sent.length;
+  const r = await handleMessage(t.conn, {
+    key: { remoteJid: 'o1@g.us', fromMe: false, id: `G${Math.random()}`, participant: OWNER },
+    message: {
+      extendedTextMessage: {
+        text: correct,
+        contextInfo: {
+          participant: '99887766@s.whatsapp.net', // LID/bukan id bot -> fromMe salah
+          quotedMessage: { conversation: 'Soal game' },
+          stanzaId: questionId,
+        },
+      },
+    },
+    messageTimestamp: Math.floor(Date.now() / 1000),
+    pushName: 'Owner',
+  }, deps);
+  assert.equal(r.reason, 'before:game-yugioh-guess.js', 'game yang menangani tebakan');
+  assert.equal(aiCalls, 0, 'AI TIDAK boleh menjawab jawaban game');
+  assert.match(
+    t.sent.slice(before2).map((s) => s.text || s.caption || '').join('\n'),
+    /BENAR/,
+    'jawaban benar harus direspon game, bukan diam',
+  );
+
+  // 3) owner balas pesan bot LAMA (bukan soal) saat game masih jalan -> AI menjawab
+  const before3 = t.sent.length;
+  const r3 = await handleMessage(t.conn, {
+    key: { remoteJid: 'o1@g.us', fromMe: false, id: `H${Math.random()}`, participant: OWNER },
+    message: {
+      extendedTextMessage: {
+        text: 'cerita dong',
+        contextInfo: { participant: BOT, quotedMessage: { conversation: 'pesan bot lama' }, stanzaId: 'PESAN-BOT-LAMA' },
+      },
+    },
+    messageTimestamp: Math.floor(Date.now() / 1000),
+    pushName: 'Owner',
+  }, deps);
+  assert.equal(aiCalls, 1, 'balasan ke pesan bot NON-game harus tetap dijawab AI saat game aktif');
+  assert.notEqual(r3.reason, 'before:game-yugioh-guess.js', 'bukan dianggap tebakan game');
+  assert.match(t.sent.slice(before3).map((s) => s.text || s.caption || '').join('\n'), /Hmph\. AI aktif/);
+
+  // 4) member biasa chat (reply pesan bot lama) -> tidak ada respon game/AI
+  const before4 = t.sent.length;
+  await handleMessage(t.conn, {
+    key: { remoteJid: 'o1@g.us', fromMe: false, id: `J${Math.random()}`, participant: '628222@s.whatsapp.net' },
+    message: {
+      extendedTextMessage: {
+        text: 'gimana kabar?',
+        contextInfo: { participant: BOT, quotedMessage: { conversation: 'pesan bot lama' }, stanzaId: 'PESAN-BOT-LAMA' },
+      },
+    },
+    messageTimestamp: Math.floor(Date.now() / 1000),
+    pushName: 'Orang',
+  }, deps);
+  assert.equal(aiCalls, 1, 'non-owner tidak memicu AI');
+  assert.equal(t.sent.length, before4, 'chat biasa member tidak boleh dibalas apa pun');
+
   t.db.close();
 });

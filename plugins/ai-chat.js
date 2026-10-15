@@ -16,6 +16,7 @@
 import { userError } from '../lib/errors.js';
 import { cleanJid } from '../lib/functions.js';
 import { getOwnerMemory } from '../lib/owner-ai.js';
+import { getQuiz } from '../lib/quiz-instance.js';
 
 const MAX_HISTORY = 12;
 
@@ -168,6 +169,17 @@ handler.all = async (m, { conn, config, isOwner } = {}) => {
   if (isOwner !== true) return;
   if (config?.ai?.ownerEnabled === false) return;
   if (m.fromMe || !m.text) return;
+
+  // Saat game tebak kartu berjalan, pesan yang DIARAHKAN ke soal game (balas
+  // pesan soal / tag bot) jangan dijawab AI — hook game yang menanganinya (atau
+  // memang bukan jawaban). Pakai aturan YgoQuiz.isDirected yang SAMA dengan
+  // hook game, bukan sekadar "ada m.quoted", supaya balasan owner ke pesan bot
+  // NON-game tetap dijawab AI selama game aktif.
+  try {
+    if (getQuiz()?.isDirected?.(m, conn)) return;
+  } catch {
+    /* abaikan, lanjut ke jalur normal */
+  }
 
   const botJid = conn?.user?.id ? cleanJid(conn.user.id) : '';
   const taggedBot = Boolean(botJid && (m.mentionedJid || []).some((jid) => cleanJid(jid) === botJid));

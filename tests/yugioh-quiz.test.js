@@ -9,6 +9,7 @@ import {
   normalizeAnswer,
 } from '../lib/guess.js';
 import { YgoQuiz } from '../lib/yugioh-quiz.js';
+import { getQuiz } from '../lib/quiz-instance.js';
 
 // ── Data uji ───────────────────────────────────────────────────────────────
 
@@ -93,7 +94,8 @@ const makeHarness = ({ cardIndex = 0, options = {}, withDb = true } = {}) => {
     options: { rounds: 1, mode: 'pilihan', timeoutMs: 5000, roundDelayMs: 0, maxAttempts: 3, ...options },
     send: async (chat, content) => {
       sent.push({ chat, ...content });
-      return { ok: true };
+      // id pesan dikirim balik supaya engine bisa mencatat soal (reply-to-question)
+      return { ok: true, key: { id: `MSG${sent.length}` } };
     },
   });
 
@@ -214,11 +216,18 @@ test('jawaban salah: balasan hanya "❌ Salah" dan ronde tetap jalan', async () 
   assert.equal(second.correct, false);
   assert.equal(sent.at(-1).text, '❌ Salah');
 
-  // percobaan ketiga: diabaikan tanpa pesan tambahan, ronde TETAP jalan
-  const before = sent.length;
+  // percobaan ketiga: pemain DIBERI TAHU sekali bahwa percobaannya habis
+  // (state.outNotified) — bukan dibalas diam, karena "jawaban benar tapi
+  // tidak ada respon" dilaporkan sebagai bug oleh user.
   const third = await quiz.handleGuess('chat@g.us', { sender: '6281@s.whatsapp.net', name: 'Tester', text: 'salah lagi' });
   assert.equal(third.reason, 'no-attempts');
-  assert.equal(sent.length, before, 'tidak boleh ada pesan tambahan saat percobaan habis');
+  assert.match(sent.at(-1).text, /habis/i, 'percobaan habis harus diberi tahu');
+
+  // percobaan keempat & seterusnya: diam supaya tidak spam
+  const before = sent.length;
+  const fourth = await quiz.handleGuess('chat@g.us', { sender: '6281@s.whatsapp.net', name: 'Tester', text: 'salah lagi 2' });
+  assert.equal(fourth.reason, 'no-attempts');
+  assert.equal(sent.length, before, 'notifikasi habis hanya boleh sekali per ronde');
 
   const state = quiz.get('chat@g.us');
   assert.ok(state, 'game harus masih berjalan');
@@ -226,7 +235,7 @@ test('jawaban salah: balasan hanya "❌ Salah" dan ronde tetap jalan', async () 
   assert.equal(state.card.name, card.name, 'kartu tidak boleh diganti');
   const body = textOf(sent);
   assert.doesNotMatch(body, /Jawabannya:/, 'jawaban tidak boleh dibuka karena salah');
-  assert.doesNotMatch(body, /Sisa percobaanmu|Percobaanmu di ronde ini habis|Ronde tetap jalan/, 'tidak boleh ada embel-embel');
+  assert.doesNotMatch(body, /Sisa percobaanmu|Ronde tetap jalan/, 'tidak boleh ada embel-embel');
   await quiz.stop('chat@g.us', { silent: true });
 });
 
@@ -291,11 +300,16 @@ test('timeout: jawaban dibuka otomatis', async () => {
   assert.equal(quiz.has('chat@g.us'), false);
 });
 
-test('tebakan di luar pilihan ganda tidak dianggap jawaban', async () => {
-  const { quiz } = makeHarness({ cardIndex: 0 });
+test('tebakan di luar pilihan ganda dibalas panduan (bukan jatuh ke plugin lain / diam)', async () => {
+  const { quiz, sent } = makeHarness({ cardIndex: 0 });
   await quiz.start('chat@g.us', { starter: '6281@s.whatsapp.net', rounds: 1 });
-  const result = await quiz.handleGuess('chat@g.us', { sender: '6281@s.whatsapp.net', text: 'halo apa kabar' });
-  assert.equal(result.handled, false);
+  const result = await quiz.handleGuess('chat@g.us', { sender: '6281@s.whatsapp.net', name: 'Pemain', text: 'halo apa kabar' });
+  // Pesan yang memang DIARAHKAN ke soal tapi bukan jawaban harus tetap ditangani
+  // game dan dijawab panduan — dulu handled:false membuatnya jatuh ke hook AI
+  // (dijawab AI) atau berakhir diam tanpa respon sama sekali.
+  assert.equal(result.handled, true);
+  assert.equal(result.reason, 'not-a-choice');
+  assert.match(textOf(sent), /A\/B\/C\/D/, 'pemain dibalas panduan jawaban');
   await quiz.stop('chat@g.us', { silent: true });
 });
 
@@ -418,8 +432,15 @@ test('plugin: perintah .tebakygo, hook tebakan, .stoptebak, dan .yugoscore', asy
   const directed = (text) => ({ ...m(text), mentionedJid: ['628999@s.whatsapp.net'] });
   assert.equal(await guessPlugin.before(directed('A'), ctx()), false);
 
-  // hook: huruf pilihan yang di-ARAHKAN (reply pesan bot) juga diterima
-  assert.equal(await guessPlugin.before({ ...m('A'), quoted: { fromMe: true, chat: '123@g.us' } }, ctx()), false);
+  // hook: balas PESAN SOAL game diterima — memakai id pesan soal, TIDAK
+  // m.quoted.fromMe (fromMe salah saat participant quoted berupa LID, dan
+  // fromMe juga membuat balas pesan bot LAMA ikut dianggap tebakan).
+  const questionId = [...(getQuiz().get('123@g.us')?.questionIds || [])][0];
+  assert.ok(questionId, 'id pesan soal harus tercatat di state game');
+  assert.equal(
+    await guessPlugin.before({ ...m('A'), quoted: { id: questionId, chat: '123@g.us', fromMe: false } }, ctx()),
+    false,
+  );
 
   await guessPlugin(m('.stoptebak'), { ...ctx(), command: 'stoptebak' });
   await guessPlugin(m('.yugoscore'), { ...ctx(), command: 'yugoscore' });
@@ -429,4 +450,125 @@ test('plugin: perintah .tebakygo, hook tebakan, .stoptebak, dan .yugoscore', asy
   // jumlah kemenangan boleh berubah (tebakan 'A' bisa benar/salah), yang penting
   // pemain dengan ygoWins > 0 tetap muncul di papan skor
   assert.match(finalBody, /Juara — \d+ benar/);
+});
+
+// ── Gejala lapangan: chat biasa kena game, owner dijawab AI / diam saja ─────
+
+test('isDirected: hanya balas soal / tag bot / DM yang diarahkan ke game', async () => {
+  const { quiz } = makeHarness({ cardIndex: 0, options: { rounds: 1, mode: 'pilihan', roundDelayMs: 0 } });
+  await quiz.start('chat@g.us', { starter: '6281@s.whatsapp.net', rounds: 1 });
+
+  const conn = { user: { id: '628999@s.whatsapp.net' } };
+  const base = (extra = {}) => ({ chat: 'chat@g.us', text: 'A', fromMe: false, mentionedJid: [], ...extra });
+  const questionId = [...quiz.get('chat@g.us').questionIds][0];
+  assert.ok(questionId, 'id pesan soal harus tercatat di state');
+
+  assert.equal(quiz.isDirected(base(), conn), false, 'chat biasa bukan tebakan');
+  assert.equal(quiz.isDirected(base({ quoted: { id: 'PESAN-BOT-LAMA', fromMe: true } }), conn), false, 'balas pesan bot LAMA bukan tebakan');
+  assert.equal(quiz.isDirected(base({ quoted: { id: questionId, fromMe: false } }), conn), true, 'balas soal diterima walau fromMe salah (LID)');
+  assert.equal(quiz.isDirected(base({ mentionedJid: ['628999@s.whatsapp.net'] }), conn), true, 'tag bot = diarahkan');
+  assert.equal(quiz.isDirected(base({ mentionedJid: ['628111@s.whatsapp.net'] }), conn), false, 'tag orang lain bukan diarahkan');
+  assert.equal(quiz.isDirected(base({ fromMe: true }), conn), false, 'pesan bot sendiri bukan tebakan');
+
+  // DM: semua teks dianggap tebakan — asalkan game sedang berjalan di chat itu
+  const dmChat = '6281@s.whatsapp.net';
+  assert.equal(quiz.isDirected(base({ chat: dmChat, isGroup: false }), conn), false, 'DM tanpa game = bukan tebakan');
+  await quiz.start(dmChat, { starter: '6281@s.whatsapp.net', rounds: 1 });
+  assert.equal(quiz.isDirected(base({ chat: dmChat, isGroup: false }), conn), true, 'DM dengan game aktif = diarahkan');
+  await quiz.stop(dmChat, { silent: true });
+
+  await quiz.stop('chat@g.us', { silent: true });
+});
+
+test('mode pilihan: teks bukan jawaban dibalas panduan tanpa mengurangi percobaan', async () => {
+  const { quiz, sent } = makeHarness({ cardIndex: 0, options: { rounds: 1, mode: 'pilihan', choiceAttempts: 1, roundDelayMs: 0 } });
+  await quiz.start('chat@g.us', { starter: '6281@s.whatsapp.net', rounds: 1 });
+
+  const prose = await quiz.handleGuess('chat@g.us', { sender: '6281@s.whatsapp.net', name: 'Tester', text: 'ini apa ya?' });
+  assert.equal(prose.handled, true, 'balasan ke soal harus dijawab game, bukan jatuh ke plugin lain');
+  assert.equal(prose.reason, 'not-a-choice');
+  assert.match(textOf(sent), /A\/B\/C\/D/, 'pemain diberi panduan jawaban');
+
+  const correct = quiz.get('chat@g.us').choices.find((choice) => choice.correct).label;
+  const ok = await quiz.handleGuess('chat@g.us', { sender: '6281@s.whatsapp.net', name: 'Tester', text: correct });
+  assert.equal(ok.correct, true, 'panduan tadi tidak boleh menghabiskan percobaan');
+
+  await quiz.stop('chat@g.us', { silent: true });
+});
+
+test('teks soal tidak mojibake (emoji timer utuh)', async () => {
+  const { quiz, sent } = makeHarness({ cardIndex: 0, options: { rounds: 1, mode: 'pilihan', roundDelayMs: 0 } });
+  await quiz.start('chat@g.us', { starter: '6281@s.whatsapp.net', rounds: 1 });
+
+  const body = textOf(sent);
+  assert.doesNotMatch(body, /\uFFFD/, 'tidak boleh ada karakter unicode rusak');
+  assert.match(body, /⏱️ \*\d+ detik\* — jawab A\/B\/C\/D/);
+
+  await quiz.stop('chat@g.us', { silent: true });
+});
+
+test('hook: balas pesan bot LAMA bukan tebakan; balas soal tetap diambil walau fromMe salah', async () => {
+  const { default: guessPlugin } = await import('../plugins/game-yugioh-guess.js');
+
+  const sent = [];
+  const conn = {
+    user: { id: '628999@s.whatsapp.net' },
+    sendMessage: async (chat, content) => {
+      sent.push({ chat, ...content });
+      return { key: { id: `M${sent.length}` } };
+    },
+  };
+  const users = {};
+  const db = {
+    data: { users },
+    touch() {},
+    user(jid) {
+      if (!users[jid]) users[jid] = { jid, saldo: 0, exp: 0, limit: 9, ygoWins: 0 };
+      return users[jid];
+    },
+  };
+  const config = {
+    bot: { prefix: ['.'] },
+    game: { yugioh: { mode: 'pilihan', rounds: 1, timeoutMs: 4000, roundDelayMs: 0, choiceAttempts: 1 } },
+    ygoprodeck: { cacheFile: false },
+  };
+  const m = (text, extra = {}) => ({
+    chat: '555@g.us',
+    sender: '628222@s.whatsapp.net',
+    fromMe: false,
+    pushName: 'Pemain',
+    text,
+    ...extra,
+  });
+  const ctx = () => ({ conn, args: [], config, db, user: db.user('628222@s.whatsapp.net'), usedPrefix: '.' });
+
+  await guessPlugin(m('.tebakygo'), { ...ctx(), command: 'tebakygo' });
+  const questionId = [...(getQuiz().get('555@g.us')?.questionIds || [])][0];
+  assert.ok(questionId, 'id pesan soal tercatat');
+
+  // 1) chat biasa yang kebetulan REPLY pesan bot LAMA -> lolos sebagai chat,
+  //    tidak dianggap tebakan (dan tidak menghabiskan percobaan)
+  const nBefore = sent.length;
+  assert.equal(
+    await guessPlugin.before(m('gimana kabar?', { quoted: { id: 'PESAN-BOT-LAMA', chat: '555@g.us', fromMe: true } }), ctx()),
+    true,
+    'balas pesan bot LAMA harus dilewatkan sebagai chat biasa',
+  );
+  assert.equal(sent.length, nBefore, 'chat biasa tidak boleh dibalas game');
+
+  // 2) balas PESAN SOAL dengan fromMe=false (participant quoted LID) ->
+  //    game tetap mengambil jawaban ini (dulu dijawab AI atau diam saja)
+  const correct = getQuiz().get('555@g.us').choices.find((choice) => choice.correct).label;
+  assert.equal(
+    await guessPlugin.before(m(correct, { quoted: { id: questionId, chat: '555@g.us', fromMe: false } }), ctx()),
+    false,
+    'balas soal game harus diambil oleh game',
+  );
+  assert.match(
+    sent.map((item) => item.text || item.caption || '').join('\n'),
+    /BENAR/,
+    'jawaban benar harus dijawab, bukan diam',
+  );
+
+  await guessPlugin(m('.stoptebak'), { ...ctx(), command: 'stoptebak', isOwner: true });
 });

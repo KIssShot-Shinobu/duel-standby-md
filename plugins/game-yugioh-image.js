@@ -89,7 +89,7 @@ const handler = async (m, { conn, args, config, db, user, command, usedPrefix })
       }
       const result = await engine.hint(m.chat, { sender: m.sender, name: m.pushName || '' });
       if (!result.handled) throw userError('Tidak ada game berjalan.');
-      return m.reply(
+      const sent = await m.reply(
         [
           `💡 *PETUNJUK ${result.reveals}/${maxHints}* — biaya ${cost} limit`,
           '',
@@ -99,11 +99,14 @@ const handler = async (m, { conn, args, config, db, user, command, usedPrefix })
           `💳 sisa limit kamu: *${paid.limit}* — sisa jatah petunjuk ronde ini: *${maxHints - result.reveals}*`,
         ].join('\n'),
       );
+      // balasan ke pesan petunjuk ini tetap dianggap mengirim jawaban
+      engine.remember(m.chat, sent);
+      return sent;
     }
 
     const result = await engine.hint(m.chat, { sender: m.sender, name: m.pushName || '' });
     if (!result.handled) throw userError('Tidak ada game berjalan.');
-    return m.reply(
+    const sent = await m.reply(
       [
         `💡 *PETUNJUK ${result.reveals}/${maxHints}*`,
         '',
@@ -111,10 +114,17 @@ const handler = async (m, { conn, args, config, db, user, command, usedPrefix })
         `🔎 ${result.data.letters} huruf • ${result.data.info}`,
       ].join('\n'),
     );
+    engine.remember(m.chat, sent);
+    return sent;
   }
 
   return true;
 };
+
+// CATATAN: hook `before` untuk jawaban game TIDAK ada di sini — semua game tebak
+// kartu (.tebakygo maupun .tebakgambar) memakai SATU hook di plugins/game-yugioh-guess.js
+// karena engine-nya sama (lib/quiz-instance.js). Hook duplikat membuat satu pesan
+// diproses dua kali (percobaan terpotong dua kali) dan menelan chat biasa.
 
 handler.help = ['tebakgambar', 'hint'];
 handler.tags = ['game'];

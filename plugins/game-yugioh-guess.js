@@ -12,9 +12,8 @@
  * nama kartu tidak terlihat. Jawaban berupa huruf (A/B/C/D) atau nama kartu
  * (toleran salah ketik).
  */
-import { ensureQuiz } from '../lib/quiz-instance.js';
+import { ensureQuiz, getQuiz } from '../lib/quiz-instance.js';
 import { consumeLimit } from '../lib/permissions.js';
-import { cleanJid } from '../lib/functions.js';
 
 const handler = async (m, { conn, args, config, db, user, isAdmin, isOwner, command, usedPrefix }) => {
   const engine = ensureQuiz(conn, config, db);
@@ -100,17 +99,18 @@ handler.before = async (m, { conn, config, db }) => {
   const prefixes = config?.bot?.prefix || [];
   if (prefixes.includes(String(m.text)[0])) return true;
 
-  const engine = ensureQuiz(conn, config, db);
-  if (!engine.has(m.chat)) return true;
+  // Ambil engine yang SUDAH ada saja — memakai ensureQuiz di sini akan membuat
+  // engine (dan klien YGOProDeck) hanya karena ada pesan masuk biasa.
+  const engine = getQuiz();
+  if (!engine?.has?.(m.chat)) return true;
+  // Perbarui socket & db aktif (engine sudah ada, tidak membuat baru).
+  ensureQuiz(conn, config, db);
 
-  // DM: hanya percakapan dengan bot, tidak ada gaduh -> teks polos boleh menebak.
-  const isGroup = m.isGroup !== false;
-  if (isGroup) {
-    const botJid = conn?.user?.id ? cleanJid(conn.user.id) : '';
-    const quotedBot = Boolean(m.quoted?.fromMe && (!m.quoted.chat || cleanJid(m.quoted.chat) === cleanJid(m.chat)));
-    const taggedBot = Boolean(botJid && (m.mentionedJid || []).some((jid) => cleanJid(jid) === botJid));
-    if (!quotedBot && !taggedBot) return true; // bukan tebakan terarah -> biarkan chat biasa
-  }
+  // Hanya pesan yang DIARAHKAN ke game: balas pesan soal ronde ini, tag bot, atau
+  // DM. Chat biasa — termasuk balas ke pesan bot LAMA (menu, dsb) — dilewatkan
+  // supaya tidak kena "❌ Salah" atau ditelan game. Aturan satu-aturannya ada di
+  // YgoQuiz.isDirected (dipakai juga oleh guard AI di plugins/ai-chat.js).
+  if (!engine.isDirected(m, conn)) return true;
 
   const result = await engine.handleGuess(m.chat, {
     sender: m.sender,
