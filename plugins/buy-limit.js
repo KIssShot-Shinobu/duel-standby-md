@@ -48,7 +48,7 @@ const handler = async (m, { args, command, config, db, user }) => {
 
   if (!raw) return m.reply(catalogText(user, config, status));
 
-  const result = quote(db, user, config, raw);
+  const result = quote(user, config, raw);
   if (!result.ok) {
     // Format salah / di luar rentang -> tampilkan katalog sekaligus.
     if (result.reason === 'invalid') {

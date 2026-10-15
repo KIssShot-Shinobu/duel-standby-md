@@ -40,7 +40,7 @@ test('quote paket memakai harga paket, bukan harga satuan', () => {
   user.saldo = 999999;
 
   const pack = baseConfig.buyLimit.packages[0];
-  const result = quote(db, user, baseConfig, String(pack.limit));
+  const result = quote(user, baseConfig, String(pack.limit));
 
   assert.equal(result.ok, true);
   assert.equal(result.limit, pack.limit);
@@ -55,7 +55,7 @@ test('quote jumlah bebas memakai harga satuan', () => {
   const user = db.user(TARGET);
   user.saldo = 999999;
 
-  const result = quote(db, user, baseConfig, 7);
+  const result = quote(user, baseConfig, 7);
 
   assert.equal(result.ok, true);
   assert.equal(result.limit, 7);
@@ -72,11 +72,11 @@ test('quote menolak jumlah di luar rentang', () => {
   const user = db.user(TARGET);
   user.saldo = 9999999;
 
-  assert.equal(quote(db, user, baseConfig, 0).reason, 'invalid');
-  assert.equal(quote(db, user, baseConfig, -5).reason, 'invalid');
-  assert.equal(quote(db, user, baseConfig, 9999).reason, 'invalid');
-  assert.equal(quote(db, user, baseConfig, 'abc').reason, 'invalid');
-  assert.equal(quote(db, user, baseConfig, '').reason, 'invalid');
+  assert.equal(quote(user, baseConfig, 0).reason, 'invalid');
+  assert.equal(quote(user, baseConfig, -5).reason, 'invalid');
+  assert.equal(quote(user, baseConfig, 9999).reason, 'invalid');
+  assert.equal(quote(user, baseConfig, 'abc').reason, 'invalid');
+  assert.equal(quote(user, baseConfig, '').reason, 'invalid');
   db.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -87,7 +87,7 @@ test('quote menolak saat saldo kurang', () => {
   user.saldo = 10;
 
   // 7 dipakai supaya tidak menabrak harga paket.
-  const result = quote(db, user, baseConfig, 7);
+  const result = quote(user, baseConfig, 7);
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'saldo');
   assert.equal(result.needed, 7 * baseConfig.buyLimit.price);
@@ -103,14 +103,14 @@ test('pembelian tidak bisa melewati batas harian', () => {
   user.lastLimitReset = Date.now(); // siklus limit harian baru saja dimulai
 
   const cap = baseConfig.buyLimit.dailyCap;
-  const first = quote(db, user, baseConfig, cap);
+  const first = quote(user, baseConfig, cap);
   assert.equal(first.ok, true, 'pembelian pertama sampai batas harian harus boleh');
 
   purchase(db, user, baseConfig, first);
-  assert.equal(buyStatus(user).dayAmount, cap);
+  assert.equal(buyStatus(user, baseConfig).dayAmount, cap);
   assert.equal(buyStatus(user, baseConfig).dayLeft, 0);
 
-  const second = quote(db, user, baseConfig, 1);
+  const second = quote(user, baseConfig, 1);
   assert.equal(second.ok, false);
   assert.equal(second.reason, 'dailyCap');
   db.close();
@@ -129,7 +129,7 @@ test('pembelian tidak bisa melewati batas bulanan', () => {
   const dayCap = baseConfig.buyLimit.dailyCap;
   let guard = 0;
   while (buyStatus(user, baseConfig).monthAmount < monthCap && guard < 100) {
-    const q = quote(db, user, baseConfig, dayCap);
+    const q = quote(user, baseConfig, dayCap);
     if (!q.ok) break;
     purchase(db, user, baseConfig, q);
     guard += 1;
@@ -137,7 +137,7 @@ test('pembelian tidak bisa melewati batas bulanan', () => {
   }
   assert.equal(buyStatus(user, baseConfig).monthAmount, monthCap, 'tracker bulanan harus terisi sampai batas');
 
-  const blocked = quote(db, user, baseConfig, 1);
+  const blocked = quote(user, baseConfig, 1);
   assert.equal(blocked.ok, false);
   assert.equal(blocked.reason, 'monthlyCap');
   db.close();
@@ -150,14 +150,14 @@ test('batas harian ikut reset saat siklus limit harian mulai lagi', () => {
   user.saldo = 9999999;
   user.lastLimitReset = Date.now();
 
-  const q = quote(db, user, baseConfig, baseConfig.buyLimit.dailyCap);
+  const q = quote(user, baseConfig, baseConfig.buyLimit.dailyCap);
   purchase(db, user, baseConfig, q);
-  assert.equal(buyStatus(user).dayAmount, baseConfig.buyLimit.dailyCap);
+  assert.equal(buyStatus(user, baseConfig).dayAmount, baseConfig.buyLimit.dailyCap);
 
   // majukan jendela pembelian di luar interval reset
   user.buyDayKey = Date.now() - baseConfig.limits.resetIntervalMs - 1000;
   assert.equal(buyStatus(user, baseConfig).dayAmount, 0, 'tracker harian harus nol setelah jendela baru');
-  assert.equal(quote(db, user, baseConfig, 1).reason, undefined);
+  assert.equal(quote(user, baseConfig, 1).reason, undefined);
   db.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -180,7 +180,7 @@ test('katalog dan quote tidak boleh beda pendapat (setiap paket harus bisa dibel
     user.lastLimitReset = Date.now();
 
     for (const item of buyCatalog(config)) {
-      const result = quote(db, user, config, String(item.limit));
+      const result = quote(user, config, String(item.limit));
       assert.equal(
         result.ok,
         true,
@@ -200,12 +200,12 @@ test('min/max tetap menolak jumlah bebas di luar rentang', () => {
   const user = db.user(TARGET);
   user.saldo = 1e9;
 
-  assert.equal(quote(db, user, config, 4).reason, 'invalid', 'di bawah min harus ditolak');
-  assert.equal(quote(db, user, config, 26).reason, 'invalid', 'di atas max harus ditolak');
+  assert.equal(quote(user, config, 4).reason, 'invalid', 'di bawah min harus ditolak');
+  assert.equal(quote(user, config, 26).reason, 'invalid', 'di atas max harus ditolak');
   // 12 sengaja bukan angka paket (paket = 10/30/60) supaya benar-benar
   // menguji jalur jumlah bebas, bukan jalur paket yang memang bebas rentang.
-  assert.equal(quote(db, user, config, 12).ok, true, 'angka bebas dalam rentang tetap boleh');
-  assert.equal(quote(db, user, config, 12).cost, 12 * config.buyLimit.price, 'harga satuan untuk jumlah bebas');
+  assert.equal(quote(user, config, 12).ok, true, 'angka bebas dalam rentang tetap boleh');
+  assert.equal(quote(user, config, 12).cost, 12 * config.buyLimit.price, 'harga satuan untuk jumlah bebas');
 
   db.close();
   fs.rmSync(dir, { recursive: true, force: true });
@@ -254,6 +254,29 @@ test('purchase tetap menormalkan saldo & bonus negatif walau transaksi ditolak',
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test('quote menolak input yang bukan bilangan bulat desimal murni', () => {
+  const { db, dir } = tmpDb();
+  const user = db.user(TARGET);
+  user.saldo = 1e9;
+
+  // Number() menerima semua ini — hex lolos jadi angka, pecahan membeli 30
+  // limit dengan harga satuan (7500) bukan harga paket (5000).
+  assert.equal(quote(user, baseConfig, '0x1A').reason, 'invalid', 'hex harus ditolak');
+  assert.equal(quote(user, baseConfig, '30.7').reason, 'invalid', 'pecahan harus ditolak');
+  assert.equal(quote(user, baseConfig, '1e3').reason, 'invalid', 'notasi ilmiah harus ditolak');
+  assert.equal(quote(user, baseConfig, '  ').reason, 'invalid', 'spasi saja harus ditolak');
+  assert.equal(quote(user, baseConfig, '-5').reason, 'invalid', 'negatif harus ditolak');
+  assert.equal(quote(user, baseConfig, '+30').reason, 'invalid', 'tanda plus harus ditolak');
+
+  // yang valid tetap diterima, termasuk spasi di sekitar
+  assert.equal(quote(user, baseConfig, ' 30 ').ok, true, 'spasi di sekitar angka sah');
+  assert.equal(quote(user, baseConfig, 30).ok, true, 'angka number sah');
+  assert.equal(quote(user, baseConfig, ' 30 ').cost, baseConfig.buyLimit.packages.find((p) => p.limit === 30).price);
+
+  db.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 // ── efek pembelian ─────────────────────────────────────────────────────────
 
 test('pembelian mengurangi saldo dan menambah limitBonus', () => {
@@ -262,7 +285,7 @@ test('pembelian mengurangi saldo dan menambah limitBonus', () => {
   user.saldo = 50000;
   const saldoAwal = user.saldo;
 
-  const q = quote(db, user, baseConfig, 10);
+  const q = quote(user, baseConfig, 10);
   const result = purchase(db, user, baseConfig, q);
 
   assert.equal(result.limit, 10);
@@ -280,7 +303,7 @@ test('limit yang dibeli bertahan setelah reset harian', () => {
   user.saldo = 50000;
   user.lastLimitReset = Date.now();
 
-  const q = quote(db, user, baseConfig, 15);
+  const q = quote(user, baseConfig, 15);
   purchase(db, user, baseConfig, q);
 
   // reset harian: limit dikembalikan ke kuota dasar + bonus
@@ -299,7 +322,7 @@ test('limit yang dibeli terpakai seperti limit biasa', () => {
   user.saldo = 50000;
   user.lastLimitReset = Date.now();
 
-  purchase(db, user, baseConfig, quote(db, user, baseConfig, 10));
+  purchase(db, user, baseConfig, quote(user, baseConfig, 10));
   const sebelum = refreshLimit(db, user, baseConfig);
 
   adjustLimit(db, user, -3, baseConfig); // berjalan seperti pemakaian biasa
@@ -319,7 +342,7 @@ test('pembelian pada user premium memakai kuota premium', () => {
   // limit ke kuota premium dulu, jadi assertion di bawah benar-benar menguji
   // kuota premium — bukan sekadar sisa limit yang kebetulan ada.
 
-  purchase(db, user, baseConfig, quote(db, user, baseConfig, 10));
+  purchase(db, user, baseConfig, quote(user, baseConfig, 10));
 
   assert.equal(user.limit, baseConfig.limits.premium + 10);
   db.close();
@@ -332,7 +355,7 @@ test('pembelian ditolak saat fitur dimatikan owner', () => {
   user.saldo = 50000;
   const config = { ...baseConfig, buyLimit: { ...baseConfig.buyLimit, enabled: false } };
 
-  assert.equal(quote(db, user, config, 10).reason, 'disabled');
+  assert.equal(quote(user, config, 10).reason, 'disabled');
   db.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -343,7 +366,7 @@ test('saldo dan bonus tidak pernah negatif walau ada data rusak', () => {
   user.saldo = 10;
   user.limitBonus = -50;
 
-  const blocked = quote(db, user, baseConfig, 5);
+  const blocked = quote(user, baseConfig, 5);
   assert.equal(blocked.ok, false, 'saldo kurang harus ditolak');
 
   const forced = { ok: true, limit: 5, cost: 0, isPackage: false };
