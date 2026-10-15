@@ -8,6 +8,9 @@
  *   .renew <nama grup | link | id>-> ajukan perpanjangan
  *   (di DM) kirim bukti bayar     -> diteruskan ke owner (handler.all)
  *
+ * Dari GRUP, penawaran (harga + QRIS) tidak dipublikasikan ke grup: dikirim
+ * via DM ke pengirim, grup cuma dapat singkatan. Lihat deliverOffer().
+ *
  * Owner (subcommand .rent):
  *   .rent approve <grup> [nomor penyewa] [hari]   .rent reject <grup> [alasan]
  *   .rent add <grup> [nomor penyewa] [hari]       .rent del <grup>
@@ -24,7 +27,11 @@ import * as Rent from '../lib/rent.js';
 
 const OWNER_SUBS = ['approve', 'reject', 'add', 'del', 'list', 'price'];
 
-/** Kirim QRIS + caption; kalau file QRIS tidak ada, kirim teks saja. */
+/**
+ * Kirim QRIS + caption; kalau file QRIS tidak ada, kirim teks saja.
+ * @returns {Promise<boolean>} true kalau benar-benar terkirim — dipakai
+ *   deliverOffer untuk tahu apakah DM-nya sampai.
+ */
 async function sendOffer(conn, chat, text, config, db) {
   const s = Rent.rentSettings(db || { data: {} }, config);
   let image = null;
@@ -33,8 +40,36 @@ async function sendOffer(conn, chat, text, config, db) {
   } catch {
     /* QRIS opsional */
   }
-  if (image) await conn.sendMessage(chat, { image, caption: text }).catch(() => {});
-  else await conn.sendMessage(chat, { text }).catch(() => {});
+  try {
+    if (image) await conn.sendMessage(chat, { image, caption: text });
+    else await conn.sendMessage(chat, { text });
+    return true;
+  } catch {
+    // GAGAL terkirim (diblokir, privasi, dll) — laporkan, jangan dibungkus senyap.
+    return false;
+  }
+}
+
+/**
+ * Kirim penawaran sewa dengan cara yang benar untuk konteksnya.
+ *
+ * Di DM      -> penawaran dikirim ke chat itu (perilaku lama, tak berubah).
+ * Di GRUP    -> penawaran lengkap (harga + QRIS) dikirim via DM ke pengirim,
+ *               grup cuma dapat singkatan. Info bayar bukan konsumsi publik —
+ *               pola yang sama dengan _rent-guard.js yang DM penambah grup
+ *               dan tidak pernah menulis ke grup.
+ *
+ * Kalau DM gagal, singkatannya jujur menyebut kegagalan alih-alih menyuruh
+ * "cek DM" yang tidak pernah terkirim.
+ */
+async function deliverOffer(m, conn, text, config, db) {
+  if (!m.isGroup) return sendOffer(conn, m.chat, text, config, db);
+
+  const delivered = await sendOffer(conn, m.sender, text, config, db);
+  const line = delivered
+    ? '📩 Cek DM kamu ya — penawaran sewa sudah aku kirim privat.'
+    : '📩 Gagal kirim DM ke kamu. Chat bot secara pribadi untuk lihat penawaran sewa.';
+  await conn.sendMessage(m.chat, { text: line }, { quoted: m }).catch(() => {});
 }
 
 /** Kirim pesan ke semua owner. */
@@ -109,7 +144,7 @@ const handler = async (m, ctx) => {
         throw userError('Kamu bukan penyewa grup ini.');
       }
       Rent.requestRent(db, resolved.jid, { renter: rental.renter, renterName: rental.renterName || m.pushName });
-      await sendOffer(conn, m.chat, `Permintaan perpanjangan *${resolved.subject || resolved.jid}* dikirim ke owner. Kirim bukti bayar di chat ini ya.`, config, db);
+      await deliverOffer(m, conn, `Permintaan perpanjangan *${resolved.subject || resolved.jid}* dikirim ke owner. Kirim bukti bayar di chat ini ya.`, config, db);
       await notifyOwners(conn, config, `🔄 Permintaan PERPANJANGAN sewa!\nGrup: *${resolved.subject || resolved.jid}*\nID: ${resolved.jid}\nOleh: ${m.pushName || bareNumber(m.sender)} (${bareNumber(m.sender)})\n\nApprove: ${p}rent approve ${resolved.jid}`);
       return true;
     }
@@ -142,7 +177,7 @@ const handler = async (m, ctx) => {
           `Cek status: ${p}rentstatus [grup]`,
           s.helpNumber ? `Kesulitan sewa? Klik link ini untuk DM owner langsung: https://wa.me/${s.helpNumber}` : null,
         ].filter(Boolean).join('\n');
-        await sendOffer(conn, m.chat, info, config, db);
+        await deliverOffer(m, conn, info, config, db);
         return true;
       }
 
@@ -153,7 +188,7 @@ const handler = async (m, ctx) => {
         return m.reply(`Grup *${resolved.subject || resolved.jid}* sudah punya sewa aktif (sisa ${Rent.remainingDays(db, resolved.jid)} hari).`);
       }
       Rent.requestRent(db, resolved.jid, { renter: m.sender, renterName: m.pushName });
-      await sendOffer(conn, m.chat, `Permintaan sewa *${resolved.subject || resolved.jid}* dikirim ke owner.\nKirim bukti bayar di chat ini ya.`, config, db);
+      await deliverOffer(m, conn, `Permintaan sewa *${resolved.subject || resolved.jid}* dikirim ke owner.\nKirim bukti bayar di chat ini ya.`, config, db);
       await notifyOwners(conn, config, `📥 Permintaan SEWA bot!\nGrup: *${resolved.subject || resolved.jid}*\nID: ${resolved.jid}\nOleh: ${m.pushName || bareNumber(m.sender)} (${bareNumber(m.sender)})\n\nApprove: ${p}rent approve ${resolved.jid}`);
       return true;
     }

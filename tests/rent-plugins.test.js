@@ -15,6 +15,7 @@ const pluginsDir = path.resolve(import.meta.dirname, '..', 'plugins');
 const quiet = { warn() {}, error() {}, info() {}, debug() {} };
 const GROUP = '120363046825098789@g.us';
 const ID = '120363046825098789';
+const SENDER = '628111@s.whatsapp.net';
 
 async function setup({ owners = ['6289999999999'], sender = '628111@s.whatsapp.net', groups = {} } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rtxzy-rent-plug-'));
@@ -280,4 +281,70 @@ test('_rent-guard: remove / tanpa author / bukan bot -> tidak ada kiriman', asyn
   const off = guardCtx({ dir, enabled: false });
   await rentGuard.onGroupParticipants(off.conn, { id: 'x', action: 'add', participants: ['628999@s.whatsapp.net'], author: '628111@s.whatsapp.net' }, { groupMetadata: {}, config: off.config });
   assert.equal(off.sent.length, 0, 'rent disabled tidak boleh kirim');
+});
+
+// ── Penawaran sewa: DM ke pengirim, bukan diposting ke grup ────────────────
+// Info bayar (harga + QRIS) bukan konsumsi publik. Konsisten dengan
+// _rent-guard.js yang sudah DM penambah grup dan tidak pernah menulis ke grup.
+
+const groupTexts = (t) =>
+  t.sent.filter((s) => s.chat === GROUP).map((s) => s.content?.text || s.content?.caption || '');
+const dmText = (t) =>
+  t.sent.filter((s) => s.chat === SENDER).map((s) => s.content?.text || s.content?.caption || '').join('\n');
+
+/** Grup hanya boleh dapat SINGKATAN — tanpa harga, QRIS, atau instruksi bayar. */
+function assertGroupOnlyGotAck(grup) {
+  assert.equal(grup.length, 1, `grup harusnya cuma dapat 1 pesan singkat, dapat ${grup.length}: ${JSON.stringify(grup)}`);
+  assert.match(grup[0], /DM/i, 'singkatan harus menuntun user ke DM');
+  assert.doesNotMatch(grup[0], /Harga/i, 'harga tidak boleh bocor ke grup');
+  assert.doesNotMatch(grup[0], /QRIS/i, 'QRIS tidak boleh bocor ke grup');
+  assert.doesNotMatch(grup[0], /Rp\s?\d/i, 'nominal rupiah tidak boleh bocor ke grup');
+  assert.doesNotMatch(grup[0], /bukti bayar/i, 'instruksi bayar tidak boleh ada di grup');
+}
+
+test('.rent (polos) di grup: penawaran lengkap via DM, grup cuma singkatan', async () => {
+  const t = await setup();
+  await handleMessage(t.conn, msg('.rent', GROUP), { plugins: t.plugins, db: t.db, config: t.config, logger: quiet });
+
+  assertGroupOnlyGotAck(groupTexts(t));
+
+  const dm = dmText(t);
+  assert.ok(dm, 'pengirim harus menerima penawaran di DM');
+  assert.match(dm, /SEWA BOT/, 'DM harus memuat info sewa');
+  assert.match(dm, /Harga/, 'harga ada di DM, bukan di grup');
+  t.db.close();
+});
+
+test('.rent (polos) di DM: penawaran tetap di chat itu, tidak ada pesan ke grup', async () => {
+  const t = await setup();
+  await handleMessage(t.conn, msg('.rent', SENDER), { plugins: t.plugins, db: t.db, config: t.config, logger: quiet });
+
+  assert.match(dmText(t), /SEWA BOT/, 'di DM penawaran tetap dikirim ke chat itu');
+  assert.equal(t.sent.filter((s) => s.chat === GROUP).length, 0, 'DM tidak boleh mengirim apa pun ke grup');
+  t.db.close();
+});
+
+test('.rent <grup> di grup: konfirmasi via DM, grup cuma singkatan', async () => {
+  const t = await setup();
+  await handleMessage(t.conn, msg(`.rent ${ID}`, GROUP), { plugins: t.plugins, db: t.db, config: t.config, logger: quiet });
+
+  assert.ok(Rent.getRental(t.db, GROUP), 'permintaan sewa tetap tercatat');
+  assertGroupOnlyGotAck(groupTexts(t));
+
+  const dm = dmText(t);
+  assert.match(dm, /Permintaan sewa/i, 'konfirmasi + instruksi bayar harus masuk DM');
+  t.db.close();
+});
+
+test('.renew di grup: konfirmasi via DM, grup cuma singkatan', async () => {
+  const t = await setup();
+  Rent.activateRent(t.db, GROUP, { renter: SENDER, renterName: 'Tester', days: 30, by: 'owner', now: Date.now() });
+
+  await handleMessage(t.conn, msg(`.renew ${ID}`, GROUP), { plugins: t.plugins, db: t.db, config: t.config, logger: quiet });
+
+  assertGroupOnlyGotAck(groupTexts(t));
+
+  const dm = dmText(t);
+  assert.match(dm, /perpanjangan/i, 'konfirmasi perpanjangan harus masuk DM');
+  t.db.close();
 });
