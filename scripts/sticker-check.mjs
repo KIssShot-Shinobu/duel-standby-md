@@ -29,10 +29,11 @@ console.log('');
 
 // ── Encoder ────────────────────────────────────────────────────────────────
 const encoder = await media.stickerEncoder();
-say('Encoder', encoder ? `${bold(encoder)}${encoder === 'sharp' ? ' (tanpa ffmpeg)' : ''}` : 'TIDAK ADA', {
+const ffmpegOk = media.hasFfmpeg();
+say('Encoder', encoder ? `${bold(encoder)}${ffmpegOk ? ' + ffmpeg' : ' (tanpa ffmpeg)'}` : 'TIDAK ADA', {
   tag: encoder ? 'success' : 'error',
 });
-say('ffmpeg', media.hasFfmpeg() ? 'tersedia' : 'tidak ada (video → stiker & GIF WhatsApp dilewati)');
+say('ffmpeg', ffmpegOk ? 'tersedia' : 'tidak ada (video → stiker & GIF WhatsApp dilewati)');
 if (!encoder) {
   print.error('Tidak ada encoder WebP. Jalankan: npm install sharp');
   process.exit(1);

@@ -20,6 +20,16 @@ import { userError } from '../lib/errors.js';
 const IMAGE_MIME = /image\/(jpe?g|png|webp|gif|bmp|tiff)/i;
 const VIDEO_MIME = /video\//i;
 
+// Acuan RTXZY-MD (persyaratan: ffmpeg + webp wajib untuk stiker video/GIF chat).
+// WhatsApp mengirim GIF chat sebagai VIDEO mp4 (gifPlayback=true) — sharp tidak
+// bisa decode mp4, jadi wajib ffmpeg. GIF sebagai file/dokumen tetap jalan via sharp.
+const FFMPEG_HINT = [
+  'Pasang ffmpeg:',
+  '• Windows: `winget install Gyan.FFmpeg` lalu buka ulang terminal',
+  '• Linux: `apt install ffmpeg`',
+  '• Cek: `ffmpeg -version`',
+].join('\n');
+
 const handler = async (m, { conn, args, command, usedPrefix, config }) => {
   const source = pickMediaSource(m, { args, text: m.text });
 
@@ -64,8 +74,11 @@ const handler = async (m, { conn, args, command, usedPrefix, config }) => {
 
   // Durasi divalidasi LEBIH DULU: video kepanjangan harus ditolak walau encoder
   // belum tentu tersedia (dulu yang muncul malah pesan "tidak ada encoder").
+  // Berlaku untuk video murni MAUPUN GIF chat (gifPlayback=mp4) — keduanya
+  // diproses sebagai video. GIF file (.gif) dipotong otomatis via sharp, jadi
+  // tidak ditolak di sini.
   const seconds = Number(content.seconds) || 0;
-  if (isVideo && !isGifLike && seconds > maxSeconds) {
+  if (isVideo && !isGifFile && seconds > maxSeconds) {
     throw userError(`❌ Video terlalu panjang (${Math.round(seconds)}s). Maksimal ${maxSeconds} detik.`);
   }
 
@@ -89,18 +102,27 @@ const handler = async (m, { conn, args, command, usedPrefix, config }) => {
   if (isGifLike || isVideo) {
     // Video asli (mp4/webm) hanya bisa lewat ffmpeg; GIF/WebP animasi bisa lewat sharp.
     // Catatan: WhatsApp mengirim GIF di chat sebagai VIDEO (mp4) dengan gifPlayback=true.
-    // Jika isGifPlayback=true tapi ffmpeg tidak ada, beri pesan yang jelas.
-    if (isRealVideo && !hasFfmpeg()) {
-      throw userError(
-        '❌ Stiker dari video (mp4) butuh ffmpeg.\nPasang dengan: `apt install ffmpeg`.',
-      );
-    }
+    // Fallback tanpa ffmpeg (seperti reaction kick/kiss yang tetap bergerak):
+    // buffer mp4 sudah jadi — kirim langsung sebagai GIF/video tanpa konversi.
     if (isGifPlayback && !hasFfmpeg()) {
-      throw userError(
-        '❌ GIF dari chat WhatsApp dikirim sebagai video (mp4) dan butuh ffmpeg untuk dijadikan stiker.\n' +
-        'Pasang ffmpeg: `apt install ffmpeg`\n' +
-        '_(GIF sebagai file/gambar/dokumen tetap bisa distiker tanpa ffmpeg lewat sharp.)_',
-      );
+      await conn.sendMessage(m.chat, { video: buffer, gifPlayback: true, mimetype: 'video/mp4' }, { quoted: m });
+      await m.reply(
+        '_(Dikirim sebagai GIF, bukan stiker — pasang ffmpeg agar jadi stiker animasi.\n' + FFMPEG_HINT + ')_',
+      ).catch(() => {});
+      return true;
+    }
+    if (isRealVideo && !hasFfmpeg()) {
+      try {
+        await conn.sendMessage(m.chat, { video: buffer, mimetype: messageMime.startsWith('video/') ? messageMime : 'video/mp4' }, { quoted: m });
+        await m.reply(
+          '_(Dikirim sebagai video, bukan stiker — pasang ffmpeg agar jadi stiker animasi.\n' + FFMPEG_HINT + ')_',
+        ).catch(() => {});
+        return true;
+      } catch {
+        throw userError(
+          '❌ Stiker dari video (mp4) butuh ffmpeg.\n' + FFMPEG_HINT,
+        );
+      }
     }
 
     const file = await conn.sendVideoAsSticker(m.chat, buffer, m, { ...options, seconds: maxSeconds });
