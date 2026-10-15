@@ -8,7 +8,7 @@
  * Saldo didapat dari chat dan kuis. Limit yang dibeli sifatnya permanen: tidak
  * hilang saat reset harian dan langsung terpakai seperti limit biasa.
  */
-import { isPremiumUser } from '../lib/permissions.js';
+import { isPremiumUser, limitQuota } from '../lib/permissions.js';
 import { buyCatalog, buySettings, buyStatus, quote, purchase, reasonText } from '../lib/buy-limit.js';
 
 const number = (value) => Number(value || 0).toLocaleString('id-ID');
@@ -16,7 +16,7 @@ const number = (value) => Number(value || 0).toLocaleString('id-ID');
 function catalogText(user, config, status) {
   const settings = buySettings(config);
   const premium = isPremiumUser(user, user.jid, config);
-  const quota = (premium ? config.limits.premium : config.limits.free) + Math.max(0, Number(user.limitBonus) || 0);
+  const quota = limitQuota(user, config);
   const lines = [
     '🛒 *Belanja Limit*',
     '',
@@ -61,9 +61,7 @@ const handler = async (m, { args, command, config, db, user }) => {
   await db.save?.(true);
 
   const after = buyStatus(user, config);
-  const quota =
-    (isPremiumUser(user, user.jid, config) ? config.limits.premium : config.limits.free) +
-    Math.max(0, Number(user.limitBonus) || 0);
+  const quota = limitQuota(user, config);
 
   return m.reply(
     [

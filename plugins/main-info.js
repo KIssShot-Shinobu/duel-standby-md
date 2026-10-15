@@ -8,7 +8,7 @@
 import { bareNumber, resolveUserTarget } from '../lib/functions.js';
 import { userError } from '../lib/errors.js';
 import { hasFfmpeg, hasYtDlp } from '../lib/media.js';
-import { isPremiumUser, levelProgress, refreshLimit } from '../lib/permissions.js';
+import { isPremiumUser, levelProgress, limitQuota, refreshLimit } from '../lib/permissions.js';
 import { profileText, botInfo, ok, err, friendlyNumber } from '../lib/messages.js';
 
 const handler = async (m, { conn, text, args, command, config, db, plugins, user, runtime, chatData, isOwner }) => {
@@ -35,10 +35,10 @@ const handler = async (m, { conn, text, args, command, config, db, plugins, user
 
     const profile = isSelf ? user : db.user(targetJid);
     const progress = levelProgress(profile.exp || 0);
-    const bonus = Math.max(0, Number(profile.limitBonus) || 0);
     const premiumActive = isPremiumUser(profile, profile.jid || targetJid, config);
     const limit = refreshLimit(db, profile, config);
-    const quota = (premiumActive ? config.limits.premium : config.limits.free) + bonus;
+    const quota = limitQuota(profile, config);
+    const bonus = Math.max(0, Number(profile.limitBonus) || 0);
     const until =
       Number(profile.premiumUntil) > Date.now()
         ? new Date(profile.premiumUntil).toLocaleDateString('id-ID', { timeZone: config.bot.timezone })

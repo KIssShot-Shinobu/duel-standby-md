@@ -162,6 +162,55 @@ test('batas harian ikut reset saat siklus limit harian mulai lagi', () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test('katalog dan quote tidak boleh beda pendapat (setiap paket harus bisa dibeli)', () => {
+  // Invariant: apa pun yang ditawarkan katalog HARUS bisa dibeli. Dulu min/max
+  // (yang dikhususkan untuk jumlah bebas) ikut menolak paket, jadi katalog
+  // menawarkan paket yang `.buylimit 30` jawab "format salah".
+  const cases = [
+    baseConfig,
+    { ...baseConfig, buyLimit: { ...baseConfig.buyLimit, min: 15 } },
+    { ...baseConfig, buyLimit: { ...baseConfig.buyLimit, max: 20 } },
+    { ...baseConfig, buyLimit: { ...baseConfig.buyLimit, min: 5, max: 25 } },
+  ];
+
+  for (const config of cases) {
+    const { db, dir } = tmpDb();
+    const user = db.user(TARGET);
+    user.saldo = 1e9;
+    user.lastLimitReset = Date.now();
+
+    for (const item of buyCatalog(config)) {
+      const result = quote(db, user, config, String(item.limit));
+      assert.equal(
+        result.ok,
+        true,
+        `katalog menawarkan ${item.limit} limit tapi quote menolaknya ` +
+          `(reason: ${result.reason}) dengan min=${config.buyLimit.min} max=${config.buyLimit.max}`,
+      );
+      assert.equal(result.cost, item.price, 'harga harus sama dengan yang ditawarkan katalog');
+    }
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('min/max tetap menolak jumlah bebas di luar rentang', () => {
+  const config = { ...baseConfig, buyLimit: { ...baseConfig.buyLimit, min: 5, max: 25 } };
+  const { db, dir } = tmpDb();
+  const user = db.user(TARGET);
+  user.saldo = 1e9;
+
+  assert.equal(quote(db, user, config, 4).reason, 'invalid', 'di bawah min harus ditolak');
+  assert.equal(quote(db, user, config, 26).reason, 'invalid', 'di atas max harus ditolak');
+  // 12 sengaja bukan angka paket (paket = 10/30/60) supaya benar-benar
+  // menguji jalur jumlah bebas, bukan jalur paket yang memang bebas rentang.
+  assert.equal(quote(db, user, config, 12).ok, true, 'angka bebas dalam rentang tetap boleh');
+  assert.equal(quote(db, user, config, 12).cost, 12 * config.buyLimit.price, 'harga satuan untuk jumlah bebas');
+
+  db.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 // ── efek pembelian ─────────────────────────────────────────────────────────
 
 test('pembelian mengurangi saldo dan menambah limitBonus', () => {
