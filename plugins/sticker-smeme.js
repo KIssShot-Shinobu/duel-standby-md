@@ -10,9 +10,9 @@
  * lalu menyuruh memegen.link merender meme-nya. Di sini dirender LOKAL dengan
  * ffmpeg drawtext: tidak ada gambar yang dikirim ke layanan lain.
  */
-import fs from 'node:fs';
 import { drawMemeText, hasDrawtext, resolveFont, webpEncoder } from '../lib/media.js';
 import { loadMedia, pickMediaSource } from '../lib/media-source.js';
+import { safeUnlink } from '../lib/functions.js';
 import { userError } from '../lib/errors.js';
 
 const handler = async (m, { conn, text, command, usedPrefix, config }) => {
@@ -81,7 +81,7 @@ const handler = async (m, { conn, text, command, usedPrefix, config }) => {
     packname: config.bot.packname,
     author: config.bot.author,
   });
-  if (file && fs.existsSync(file)) fs.unlinkSync(file);
+  safeUnlink(file);
   return true;
 };
 

@@ -12,9 +12,9 @@
  *    pesan — banyak GIF dikirim WhatsApp sebagai dokumen tanpa mimetype jelas.
  *  - Video/GIF dipotong otomatis ke `maxStickerSeconds`.
  */
-import fs from 'node:fs';
 import { detectMediaKind, hasFfmpeg, stickerEncoder } from '../lib/media.js';
 import { loadMedia, mediaMime, pickMediaSource } from '../lib/media-source.js';
+import { safeUnlink } from '../lib/functions.js';
 import { userError } from '../lib/errors.js';
 
 const IMAGE_MIME = /image\/(jpe?g|png|webp|gif|bmp|tiff)/i;
@@ -126,7 +126,7 @@ const handler = async (m, { conn, args, command, usedPrefix, config }) => {
     }
 
     const file = await conn.sendVideoAsSticker(m.chat, buffer, m, { ...options, seconds: maxSeconds });
-    if (file && fs.existsSync(file)) fs.unlinkSync(file);
+    safeUnlink(file);
     return true;
   }
 
@@ -137,7 +137,7 @@ const handler = async (m, { conn, args, command, usedPrefix, config }) => {
   }
 
   const file = await conn.sendImageAsSticker(m.chat, buffer, m, options);
-  if (file && fs.existsSync(file)) fs.unlinkSync(file);
+  safeUnlink(file);
   return true;
 };
 
