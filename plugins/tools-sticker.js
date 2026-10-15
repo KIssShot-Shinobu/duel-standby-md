@@ -12,7 +12,7 @@
  *    pesan — banyak GIF dikirim WhatsApp sebagai dokumen tanpa mimetype jelas.
  *  - Video/GIF dipotong otomatis ke `maxStickerSeconds`.
  */
-import { detectMediaKind, hasFfmpeg, stickerEncoder } from '../lib/media.js';
+import { detectMediaKind, ffmpegInstallHint, hasFfmpeg, stickerEncoder } from '../lib/media.js';
 import { loadMedia, mediaMime, pickMediaSource } from '../lib/media-source.js';
 import { safeUnlink } from '../lib/functions.js';
 import { userError } from '../lib/errors.js';
@@ -23,12 +23,7 @@ const VIDEO_MIME = /video\//i;
 // Acuan RTXZY-MD (persyaratan: ffmpeg + webp wajib untuk stiker video/GIF chat).
 // WhatsApp mengirim GIF chat sebagai VIDEO mp4 (gifPlayback=true) — sharp tidak
 // bisa decode mp4, jadi wajib ffmpeg. GIF sebagai file/dokumen tetap jalan via sharp.
-const FFMPEG_HINT = [
-  'Pasang ffmpeg:',
-  '• Windows: `winget install Gyan.FFmpeg` lalu buka ulang terminal',
-  '• Linux: `apt install ffmpeg`',
-  '• Cek: `ffmpeg -version`',
-].join('\n');
+const FFMPEG_HINT = () => `Pasang ffmpeg:\n${ffmpegInstallHint({ check: false })}`;
 
 const handler = async (m, { conn, args, command, usedPrefix, config }) => {
   const source = pickMediaSource(m, { args, text: m.text });
@@ -90,8 +85,9 @@ const handler = async (m, { conn, args, command, usedPrefix, config }) => {
         '',
         'Pilih salah satu (paling gampang dulu):',
         '• `npm install sharp` — direkomendasikan, *tanpa ffmpeg* (GIF animasi jalan)',
-        '• `apt install ffmpeg` — lengkap dengan libwebp (sekalian untuk video & yt-dlp)',
         '• `apt install webp` — menyediakan perintah cwebp (gambar diam saja)',
+        '• ffmpeg lengkap dengan libwebp (sekalian untuk video & yt-dlp):',
+        ffmpegInstallHint({ check: false }),
         '',
         'Cek cepat: `node -e "import(\'sharp\').then(()=>console.log(\'sharp OK\'))"`',
       ].join('\n'),
@@ -107,7 +103,7 @@ const handler = async (m, { conn, args, command, usedPrefix, config }) => {
     if (isGifPlayback && !hasFfmpeg()) {
       await conn.sendMessage(m.chat, { video: buffer, gifPlayback: true, mimetype: 'video/mp4' }, { quoted: m });
       await m.reply(
-        '_(Dikirim sebagai GIF, bukan stiker — pasang ffmpeg agar jadi stiker animasi.\n' + FFMPEG_HINT + ')_',
+        '_(Dikirim sebagai GIF, bukan stiker — pasang ffmpeg agar jadi stiker animasi.\n' + FFMPEG_HINT() + ')_',
       ).catch(() => {});
       return true;
     }
@@ -115,12 +111,12 @@ const handler = async (m, { conn, args, command, usedPrefix, config }) => {
       try {
         await conn.sendMessage(m.chat, { video: buffer, mimetype: messageMime.startsWith('video/') ? messageMime : 'video/mp4' }, { quoted: m });
         await m.reply(
-          '_(Dikirim sebagai video, bukan stiker — pasang ffmpeg agar jadi stiker animasi.\n' + FFMPEG_HINT + ')_',
+          '_(Dikirim sebagai video, bukan stiker — pasang ffmpeg agar jadi stiker animasi.\n' + FFMPEG_HINT() + ')_',
         ).catch(() => {});
         return true;
       } catch {
         throw userError(
-          '❌ Stiker dari video (mp4) butuh ffmpeg.\n' + FFMPEG_HINT,
+          '❌ Stiker dari video (mp4) butuh ffmpeg.\n' + FFMPEG_HINT(),
         );
       }
     }

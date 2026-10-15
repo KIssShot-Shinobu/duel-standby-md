@@ -10,7 +10,7 @@
  * lalu menyuruh memegen.link merender meme-nya. Di sini dirender LOKAL dengan
  * ffmpeg drawtext: tidak ada gambar yang dikirim ke layanan lain.
  */
-import { drawMemeText, hasDrawtext, resolveFont, webpEncoder } from '../lib/media.js';
+import { drawMemeText, ffmpegInstallHint, hasDrawtext, resolveFont, webpEncoder } from '../lib/media.js';
 import { loadMedia, pickMediaSource } from '../lib/media-source.js';
 import { safeUnlink } from '../lib/functions.js';
 import { userError } from '../lib/errors.js';
@@ -46,10 +46,12 @@ const handler = async (m, { conn, text, command, usedPrefix, config }) => {
   }
 
   if (!webpEncoder()) {
-    throw userError('❌ Server belum punya encoder WebP (pasang `apt install ffmpeg`).');
+    throw userError(`❌ Server belum punya encoder WebP. Pasang ffmpeg:\n${ffmpegInstallHint({ check: false })}`);
   }
   if (!hasDrawtext()) {
-    throw userError('❌ ffmpeg di server tidak punya filter *drawtext*, jadi teks meme tidak bisa digambar.\nPasang ffmpeg lengkap: `apt install ffmpeg`.');
+    throw userError(
+      `❌ ffmpeg di server tidak punya filter *drawtext*, jadi teks meme tidak bisa digambar.\nPasang ffmpeg lengkap:\n${ffmpegInstallHint()}`,
+    );
   }
   if (!resolveFont(config.media?.fontPath || '')) {
     throw userError(

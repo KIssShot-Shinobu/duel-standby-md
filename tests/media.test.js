@@ -8,6 +8,7 @@ import { attachHelpers } from '../lib/simple.js';
 import {
   addExif,
   detectMediaKind,
+  ffmpegInstallHint,
   hasFfmpeg,
   imageToWebp,
   isAnimatedWebp,
@@ -535,4 +536,22 @@ test('audioExtension menebak jenis audio dari magic bytes', () => {
   assert.equal(audioExtension(Buffer.concat([Buffer.from('OggS'), Buffer.alloc(12)])), 'ogg');
   assert.equal(audioExtension(Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])), 'webm');
   assert.equal(audioExtension(Buffer.alloc(4)), 'm4a');
+});
+
+// ── Petunjuk pemasangan ffmpeg ──────────────────────────────────────────────
+
+test('ffmpegInstallHint selalu menyebut Windows DAN Linux', () => {
+  // Instruksi ini dulu diulang di 9 tempat dengan 5 redaksi berbeda, dan 7 di
+  // antaranya hanya menyebut `apt install ffmpeg` — saran yang tak berguna bagi
+  // user Windows. Sekarang helper ini SATU-satunya sumber teksnya, jadi baris
+  // Windows tidak bisa lagi hilang diam-diam dari sebagian pesan error.
+  const hint = ffmpegInstallHint();
+  assert.match(hint, /winget install Gyan\.FFmpeg/, 'harus menyebut cara pasang di Windows');
+  assert.match(hint, /apt install ffmpeg/, 'harus menyebut cara pasang di Linux');
+  assert.match(hint, /ffmpeg -version/, 'baris cek ikut secara bawaan');
+
+  const bare = ffmpegInstallHint({ check: false });
+  assert.match(bare, /winget install Gyan\.FFmpeg/, 'Windows tetap ada walau tanpa baris cek');
+  assert.match(bare, /apt install ffmpeg/, 'Linux tetap ada walau tanpa baris cek');
+  assert.doesNotMatch(bare, /ffmpeg -version/, 'check:false harus menyembunyikan baris cek');
 });
