@@ -211,6 +211,49 @@ test('min/max tetap menolak jumlah bebas di luar rentang', () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test('purchase menolak hasil yang tidak lolos quote (validasi ulang, bukan percaya buta)', () => {
+  // purchase() dulu mempercayai result apa adanya: saldo 5 bisa membeli 60
+  // limit dengan cost 0, dan memanggilnya dua kali mendorong tracker harian
+  // ke 120 padahal cap-nya 60. Validasi ulang membuatnya mustahil.
+  const { db, dir } = tmpDb();
+  const user = db.user(TARGET);
+  user.saldo = 5;
+  user.lastLimitReset = Date.now();
+
+  const forged = { ok: true, limit: 60, cost: 0, isPackage: false };
+  const first = purchase(db, user, baseConfig, forged);
+
+  assert.equal(first.ok, false, 'pembelian yang tidak lolos quote harus ditolak');
+  assert.equal(first.reason, 'saldo', 'penolakan harus menyebut alasan sebenarnya');
+  assert.equal(first.limit, 0, 'tidak boleh melaporkan limit terbeli');
+  assert.equal(user.saldo, 5, 'saldo tidak boleh berubah saat ditolak');
+  assert.equal(user.limitBonus, 0, 'bonus tidak boleh naik saat ditolak');
+  assert.equal(buyStatus(user, baseConfig).dayAmount, 0, 'tracker harian tidak boleh terisi');
+
+  // pemanggilan berulang tidak bisa menumpuk lewat cap
+  purchase(db, user, baseConfig, forged);
+  assert.equal(buyStatus(user, baseConfig).dayAmount, 0, 'cap harian tidak bisa dibobol');
+
+  db.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('purchase tetap menormalkan saldo & bonus negatif walau transaksi ditolak', () => {
+  const { db, dir } = tmpDb();
+  const user = db.user(TARGET);
+  user.saldo = 10;
+  user.limitBonus = -50;
+
+  const res = purchase(db, user, baseConfig, { ok: true, limit: 5, cost: 0, isPackage: false });
+
+  assert.equal(res.ok, false, 'saldo 10 tidak cukup untuk 5 limit');
+  assert.ok(user.saldo >= 0, 'saldo tidak boleh negatif');
+  assert.ok(user.limitBonus >= 0, 'bonus tidak boleh negatif');
+
+  db.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 // ── efek pembelian ─────────────────────────────────────────────────────────
 
 test('pembelian mengurangi saldo dan menambah limitBonus', () => {

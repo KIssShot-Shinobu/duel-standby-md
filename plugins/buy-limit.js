@@ -58,6 +58,14 @@ const handler = async (m, { args, command, config, db, user }) => {
   }
 
   const done = purchase(db, user, config, result);
+  // purchase() validasi ulang terhadap keadaan terkini — kalau ditolak di
+  // sini berarti keadaan berubah sejak quote(). Jangan pernah klaim sukses.
+  if (!done.ok) {
+    if (done.reason === 'invalid') {
+      return m.reply(`${reasonText('invalid', { config })}\n\n${catalogText(user, config, buyStatus(user, config))}`);
+    }
+    return m.reply(reasonText(done.reason, { config, result, status: buyStatus(user, config) }));
+  }
   await db.save?.(true);
 
   const after = buyStatus(user, config);
