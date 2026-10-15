@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
+  buildMemeFilter,
   drawMemeText,
   escapeDrawtext,
   hasDrawtext,
@@ -48,7 +49,8 @@ test('wrapMemeText memecah teks panjang menjadi beberapa baris', () => {
 });
 
 test('escapeDrawtext meng-escape karakter khusus filtergraph', () => {
-  assert.equal(escapeDrawtext("it's 100%: a,b;c[d]"), "it\\'s 100\\%\\: a\\,b\\;c\\[d\\]");
+  // Titik dua harus DUA backslash (bukan satu) — lihat catatan di escapeDrawtext.
+  assert.equal(escapeDrawtext("it's 100%: a,b;c[d]"), "it\\'s 100\\%\\\\: a\\,b\\;c\\[d\\]");
   assert.equal(escapeDrawtext('baris\nbaru'), 'baris baru');
   assert.equal(escapeDrawtext('back\\slash'), 'back\\\\slash');
 });
@@ -61,6 +63,45 @@ test('resolveFont menemukan berkas font di sistem', () => {
 });
 
 // ── Render meme ────────────────────────────────────────────────────────────
+
+test('buildMemeFilter escape titik dua path font dengan dua backslash', () => {
+  // Regresi: satu backslash (C\:/) membuat parser filtergraph ffmpeg GAGAL
+  // sebelum file dicek, jadi .smeme mati total di Windows. Linux lolos karena
+  // path fontnya tidak ada titik dua — makanya bug ini lolos dari test yang
+  // bergantung pada font sungguhan di mesin.
+  const { filter } = buildMemeFilter({ top: 'HI', bottom: '', font: 'C:/Windows/Fonts/impact.ttf' });
+  assert.match(
+    filter,
+    /fontfile=C\\\\:\/Windows\/Fonts\/impact\.ttf/,
+    'path Windows harus menghasilkan C\\\\: (dua backslash), bukan C\\:',
+  );
+
+  // path Linux tanpa titik dua tetap dipakai apa adanya
+  const linux = buildMemeFilter({ top: 'HI', bottom: '', font: '/usr/share/fonts/dejavu.ttf' });
+  assert.match(linux.filter, /fontfile=\/usr\/share\/fonts\/dejavu\.ttf/);
+
+  // teks tidak boleh merusak struktur filter (karakter khusus ter-escape)
+  const tricky = buildMemeFilter({ top: "it's 50%: a,b", bottom: 'x;y[z]', font: 'C:/f.ttf' });
+  assert.ok(tricky.filter.includes('drawtext='), 'harus tetap punya drawtext');
+  assert.equal((tricky.filter.match(/drawtext=/g) || []).length, 2, 'dua baris = dua drawtext');
+});
+
+test('drawmemeText menjalankan filtergraph yang dihasilkan buildMemeFilter', async (t) => {
+  // Test INTEGRASI: tidak cukup filternya terlihat benar secara string —
+  // ffmpeg harus benar-benar menerimanya. Ini yang menangkap bug escaping.
+  if (!ffmpeg) return t.skip('ffmpeg tidak terpasang');
+  if (!hasDrawtext()) return t.skip('ffmpeg tanpa filter drawtext');
+
+  const font = resolveFont();
+  const { filter } = buildMemeFilter({ top: 'GAME OVER', bottom: 'aku menyerah', font });
+  const png = await makePng('red', 256);
+
+  const out = await runFfmpeg(
+    ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vf', filter, '-frames:v', '1', '-an', '-f', 'image2pipe', '-vcodec', 'png', 'pipe:1'],
+    png,
+  );
+  assert.equal(out.subarray(1, 4).toString(), 'PNG', 'filtergraph harus diterima ffmpeg dan menghasilkan PNG');
+});
 
 test('drawMemeText menggambar teks (hasilnya beda dari gambar polos)', async (t) => {
   if (!ffmpeg) return t.skip('ffmpeg tidak terpasang');
