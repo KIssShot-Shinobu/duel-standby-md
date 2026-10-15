@@ -22,9 +22,9 @@ const handler = async (m, { config }) => {
   );
 };
 
-handler.help = ['tqto', 'credit'];
+handler.help = ['credit', 'tqto'];
 handler.tags = ['info'];
-handler.command = /^(tqto|credit|thanks)$/i;
+handler.command = /^(credit|tqto|thanks)$/i;
 handler.limit = false;
 
 export default handler;
