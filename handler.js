@@ -107,6 +107,17 @@ export async function handleMessage(conn, raw, deps) {
   // tanpa teks apa pun — jangan diproses sebagai pesan user.
   if (!hasMeaningfulContent(raw.message)) return { handled: false, reason: 'no-content' };
 
+  // Pesan basi: saat bot baru nyambung setelah mati, WhatsApp menyalurkan
+  // antrian pesan yang tertunda (bisa berjam-jam lalu). Tanpa filter ini bot
+  // membalas seluruh backlog sekaligus dan membanjiri grup. Pesan yang lebih
+  // tua dari `config.bot.maxMessageAgeMs` (default 5 menit) diabaikan.
+  // Timestamp hilang (0) atau di masa depan (clock skew) TIDAK dianggap basi.
+  const maxAgeMs = Number(config.bot?.maxMessageAgeMs);
+  const tsSec = Number(raw.messageTimestamp || 0);
+  if (Number.isFinite(maxAgeMs) && maxAgeMs > 0 && tsSec > 0) {
+    if (Date.now() - tsSec * 1000 > maxAgeMs) return { handled: false, reason: 'stale-message' };
+  }
+
   // Selesaikan identitas LID -> nomor telepon supaya permission konsisten.
   if (m.senderLid && m.senderPn) db.mapLid(m.senderLid, m.senderPn);
   if (String(m.sender).endsWith('@lid')) {

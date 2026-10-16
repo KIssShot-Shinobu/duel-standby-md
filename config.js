@@ -47,6 +47,13 @@ export const config = {
     author: env('STICKER_AUTHOR', 'Bot WhatsApp'),
     thumbnail: env('BOT_THUMBNAIL', ''),
     timezone: env('TIMEZONE', 'Asia/Jakarta'),
+    /**
+     * Pesan lebih tua dari ini (ms) diabaikan. Saat bot mati lalu nyambung
+     * lagi, WhatsApp menyalurkan antrian pesan tertunda (bisa berjam-jam lalu).
+     * Tanpa batas ini bot membalas seluruh backlog sekaligus dan membanjiri
+     * grup. 0 = nonaktif (proses semua pesan apa pun umurnya).
+     */
+    maxMessageAgeMs: envNumber('MAX_MESSAGE_AGE_MS', 5 * 60 * 1000),
   },
 
   /** Flag runtime dari CLI */
