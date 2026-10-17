@@ -23,16 +23,17 @@
  *   .carry @user     -> angkat user
  *
  * Target: mention (@628xx), reply pesan user, atau nomor di argumen.
+ * Nama target di caption dirender WhatsApp sendiri dari token `@angka` +
+ * `mentions` (contextInfo.mentionedJid) — lihat catatan di dalam handler.
  * Tanpa target -> bot jadi target (self-reaction).
  * Alias Indonesia: .tendang, .peluk, .cium, .tampar, .sayang, .peluk2, .colok, .gelitik, .high5, .gigit, .lempar, .angkat
  */
 
-import { getTargets } from '../lib/functions.js';
+import { bareNumber, getTargets } from '../lib/functions.js';
 import { fetchImage, downloadImage } from '../lib/image-source.js';
 import { sendImageResult } from '../lib/media-send.js';
 import { userError } from '../lib/errors.js';
 import { userName } from '../lib/messages.js';
-import { findParticipantPhone } from '../lib/permissions.js';
 
 // Mapping command -> kategori nekos.best
 const REACTION_MAP = {
@@ -137,7 +138,7 @@ function helpText(usedPrefix) {
   return lines.join('\n');
 }
 
-const handler = async (m, { conn, text, args, command, usedPrefix, config, groupMetadata }) => {
+const handler = async (m, { conn, text, args, command, usedPrefix, config }) => {
   if (/^reactionlist$/i.test(command)) return m.reply(helpText(usedPrefix));
 
   // command langsung = action (.kick, .hug, .kiss, dll)
@@ -150,25 +151,20 @@ const handler = async (m, { conn, text, args, command, usedPrefix, config, group
 
   let targetJid = null;
   let targetName = null;
+  let mentionJids = [];
 
   if (targets.length > 0) {
     targetJid = targets[0];
-    // Target bisa berupa LID atau phone number JID. conn.getName() hanya
-    // bekerja dengan phone number JID — kalau diberi LID, ia return LID-nya
-    // sendiri sehingga validasi nama selalu gagal. Oleh karena itu cari
-    // phone number peserta dari groupMetadata dulu untuk lookup nama.
-    let phoneJid = targetJid;
-    if (String(targetJid).endsWith('@lid')) {
-      const pn = findParticipantPhone(groupMetadata, targetJid);
-      if (pn) phoneJid = pn;
-    }
-    try {
-      const name = await conn.getName(phoneJid);
-      const num = phoneJid.split('@')[0];
-      targetName = (name && name !== num) ? name : num;
-    } catch {
-      targetName = phoneJid.split('@')[0];
-    }
+    // Nama target TIDAK di-resolve oleh bot sendiri. WhatsApp yang mengganti
+    // token `@angka` di teks menjadi nama asalkan JID-nya ada di `mentions`
+    // (contextInfo.mentionedJid) — itu sebabnya pesan asli user tertulis
+    // `@183498317000877` (angka) tapi tampil sebagai nama di HP.
+    // Token dan `mentions` karena itu wajib memakai bentuk identitas yang SAMA,
+    // persis seperti WhatsApp menulis mentionnya sendiri; kalau tidak cocok,
+    // WhatsApp hanya menampilkan angkanya. Pola ini sama dengan
+    // `plugins/_afk.js` dan `plugins/_welcome.js` yang sudah jalan di grup.
+    mentionJids = [targetJid];
+    targetName = bareNumber(targetJid);
   } else {
     // Self-reaction: bot jadi target
     targetJid = conn.user?.id || '628999@s.whatsapp.net';
@@ -205,7 +201,7 @@ const handler = async (m, { conn, text, args, command, usedPrefix, config, group
     caption,
     quoted: m,
     config,
-    mentions: isSelf ? [] : [targetJid],
+    mentions: isSelf ? [] : mentionJids,
   });
 
   return item.id;
