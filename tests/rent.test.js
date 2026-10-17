@@ -186,6 +186,36 @@ test('resolveGroupJid: link valid/batal, id, nama, tidak ketemu', async () => {
   assert.equal(await Rent.resolveGroupJid(conn, ''), null);
 });
 
+test('resolveGroupJid: nama yang cocok di banyak grup memunculkan kandidat, bukan pilih diam-diam', async () => {
+  // Dua grup sama-sama bernama "ROOM 45" — kasus asli: owner menyewa grup
+  // yang salah karena resolve memilih kecocokan pertama secara diam-diam.
+  const conn = {
+    groupFetchAllParticipating: async () => ({
+      '120363401734744750@g.us': { id: '120363401734744750@g.us', subject: 'ROOM 45' },
+      '120363402111344199@g.us': { id: '120363402111344199@g.us', subject: 'ROOM 45' },
+    }),
+  };
+  await assert.rejects(
+    () => Rent.resolveGroupJid(conn, 'ROOM 45'),
+    (err) => {
+      assert.equal(err.friendly, true, 'harus userError ramah');
+      assert.match(err.message, /120363401734744750@g\.us/, 'kandidat pertama harus disebut');
+      assert.match(err.message, /120363402111344199@g\.us/, 'kandidat kedua harus disebut');
+      return true;
+    },
+  );
+});
+
+test('resolveGroupJid: nama yang cocok tunggal tetap jalan (tidak dianggap ambigu)', async () => {
+  const conn = {
+    groupFetchAllParticipating: async () => ({
+      '111@g.us': { id: '111@g.us', subject: 'ROOM 45' },
+      '222@g.us': { id: '222@g.us', subject: 'Grup Lain' },
+    }),
+  };
+  assert.deepEqual(await Rent.resolveGroupJid(conn, 'ROOM 45'), { jid: '111@g.us', subject: 'ROOM 45' });
+});
+
 test('review: extendRent mereset reminders supaya periode berikutnya dapat reminder lagi', () => {
   const db = fakeDb();
   const cfg = rentConfig();
