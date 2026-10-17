@@ -255,8 +255,8 @@ Aturan yang harus dipenuhi (semua sudah dipatok test di Step 1):
   1. `id` sama persis,
   2. `normalizeCityName(name) === normalizeCityName(input)`,
   3. nama berakhiran **kata utuh** input: `name === input || name.endsWith(' ' + input)`,
-  4. `name.includes(input)`.
-  Tingkat dengan hasil `> 1` → `{ ambiguous: hasil }`; satu hasil → `{ city }`; tanpa hasil → `null`. Input kosong → `null`.
+  4. semua kata input muncul sebagai **kata utuh** di nama (mis. `bandung barat`).
+  Tingkat dengan hasil `> 1` → `{ ambiguous: hasil }`; satu hasil → `{ city }`; tanpa hasil → `null`. Input kosong → `null`. Tingkat 3 & 4 sengaja kata utuh, bukan substring: `arta` tidak boleh cocok ke `KOTA JAKARTA`.
 
 - [ ] **Step 4: Jalankan, pastikan lulus**
 
