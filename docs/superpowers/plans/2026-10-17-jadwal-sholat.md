@@ -561,10 +561,10 @@ git commit -m "feat(sholat): sweep, penandaan terkirim, dan format pesan"
 **Interfaces:**
 - Consumes: `config.sholat.apiBase`, `config.sholat.timeoutMs` (Task 1); `PRAYERS` (Task 3).
 - Produces (dipakai Task 8, 9):
-  - `fetchCities(config, { fetchImpl } = {}) -> Promise<{id,name}[]>`
-  - `fetchDayTimes(config, cityId, dateStr, { fetchImpl } = {}) -> Promise<{ cityId, date, times }>` (`times` adalah `Record<prayer, 'HH:MM'>`)
+  - `fetchCities(config, { json } = {}) -> Promise<{id,name}[]>`
+  - `fetchDayTimes(config, cityId, dateStr, { json } = {}) -> Promise<{ cityId, date, times }>` (`times` adalah `Record<prayer, 'HH:MM'>`)
   - `clearCache() -> void`
-  - `fetchImpl` default `globalThis.fetch` (dipakai test untuk menyuntik stub).
+  - `json` default `fetchJson` dari `lib/functions.js` — helper repo yang sudah menangani timeout (`AbortSignal.timeout`), cek `response.ok`, dan parsing JSON; disuntik test supaya tidak menyentuh jaringan.
 
 - [ ] **Step 1: Tulis test yang gagal**
 
@@ -576,56 +576,54 @@ import assert from 'node:assert/strict';
 import { fetchCities, fetchDayTimes, clearCache } from '../lib/sholat-source.js';
 
 const CFG = { sholat: { apiBase: 'https://contoh.invalid/v2', timeoutMs: 1000 } };
-const json = (payload) => async () => ({ ok: true, status: 200, json: async () => payload });
+/** Stub `fetchJson`: menerima url, mengembalikan payload siap pakai (bukan Response). */
+const stub = (payload) => async () => payload;
 
 test('fetchCities memetakan payload dan memakai cache', async () => {
   clearCache();
   let calls = 0;
-  const fetchImpl = async () => {
+  const json = async () => {
     calls += 1;
-    return { ok: true, status: 200, json: async () => ({ status: true, data: [{ id: '1301', lokasi: 'KOTA JAKARTA' }] }) };
+    return { status: true, data: [{ id: '1301', lokasi: 'KOTA JAKARTA' }] };
   };
-  assert.deepEqual(await fetchCities(CFG, { fetchImpl }), [{ id: '1301', name: 'KOTA JAKARTA' }]);
-  assert.deepEqual(await fetchCities(CFG, { fetchImpl }), [{ id: '1301', name: 'KOTA JAKARTA' }]);
+  assert.deepEqual(await fetchCities(CFG, { json }), [{ id: '1301', name: 'KOTA JAKARTA' }]);
+  assert.deepEqual(await fetchCities(CFG, { json }), [{ id: '1301', name: 'KOTA JAKARTA' }]);
   assert.equal(calls, 1, 'panggilan kedua harus dari cache');
 });
 
 test('fetchCities melempar saat status:false atau jaringan gagal', async () => {
   clearCache();
-  await assert.rejects(() => fetchCities(CFG, { fetchImpl: json({ status: false, data: null }) }));
-  await assert.rejects(() => fetchCities(CFG, { fetchImpl: async () => { throw new Error('putus'); } }));
+  await assert.rejects(() => fetchCities(CFG, { json: stub({ status: false, data: null }) }));
+  await assert.rejects(() => fetchCities(CFG, { json: async () => { throw new Error('putus'); } }));
 });
 
 test('fetchDayTimes memetakan jadwal dan cache per kota per hari', async () => {
   clearCache();
   let calls = 0;
-  const fetchImpl = async (url) => {
+  const json = async (url, options) => {
     calls += 1;
     assert.match(String(url), /\/sholat\/jadwal\/1301\/2026\/10\/17$/);
+    assert.equal(options.timeout, 1000, 'timeout dari config diteruskan ke fetchJson');
     return {
-      ok: true,
-      status: 200,
-      json: async () => ({
-        status: true,
-        data: { id: 1301, lokasi: 'KOTA JAKARTA', daerah: 'DKI JAKARTA', jadwal: {
-          tanggal: 'Sabtu, 17/10/2026', imsak: '04:05', subuh: '04:15', terbit: '05:28', dhuha: '05:55',
-          dzuhur: '11:42', ashar: '14:48', maghrib: '17:49', isya: '18:58', date: '2026-10-17',
-        } },
-      }),
+      status: true,
+      data: { id: 1301, lokasi: 'KOTA JAKARTA', daerah: 'DKI JAKARTA', jadwal: {
+        tanggal: 'Sabtu, 17/10/2026', imsak: '04:05', subuh: '04:15', terbit: '05:28', dhuha: '05:55',
+        dzuhur: '11:42', ashar: '14:48', maghrib: '17:49', isya: '18:58', date: '2026-10-17',
+      } },
     };
   };
-  const hasil = await fetchDayTimes(CFG, '1301', '2026-10-17', { fetchImpl });
+  const hasil = await fetchDayTimes(CFG, '1301', '2026-10-17', { json });
   assert.deepEqual(hasil, { cityId: '1301', date: '2026-10-17', times: {
     subuh: '04:15', dzuhur: '11:42', ashar: '14:48', maghrib: '17:49', isya: '18:58',
   } });
-  await fetchDayTimes(CFG, '1301', '2026-10-17', { fetchImpl });
+  await fetchDayTimes(CFG, '1301', '2026-10-17', { json });
   assert.equal(calls, 1);
 });
 
 test('fetchDayTimes melempar bila field jadwal kurang', async () => {
   clearCache();
-  const fetchImpl = json({ status: true, data: { jadwal: { subuh: '04:15', dzuhur: '11:42' } } });
-  await assert.rejects(() => fetchDayTimes(CFG, '1301', '2026-10-17', { fetchImpl }));
+  const json = stub({ status: true, data: { jadwal: { subuh: '04:15', dzuhur: '11:42' } } });
+  await assert.rejects(() => fetchDayTimes(CFG, '1301', '2026-10-17', { json }));
 });
 ```
 
@@ -637,7 +635,7 @@ Expected: FAIL — modul belum ada.
 - [ ] **Step 3: Implementasi `lib/sholat-source.js`**
 
 - Cache modul-level: `{ at, items }` untuk katalog (TTL 7 hari sebagai konstanta modul) dan `Map` `"${cityId}:${dateStr}"` untuk jadwal harian. `clearCache()` mengosongkan keduanya (dipakai test).
-- Setiap panggilan jaringan: `AbortController` + `setTimeout(..., config.sholat.timeoutMs)`, `clearTimeout` di `finally`; periksa `res.ok`; periksa `payload.status === true`.
+- Panggilan jaringan memakai `fetchJson(url, { timeout: config.sholat.timeoutMs })` dari `lib/functions.js` — timeout (`AbortSignal.timeout`), cek `response.ok`, dan parsing JSON sudah ditangani di sana. `lib/sholat-source.js` hanya menambahkan cek khas MyQuran: `payload.status === true`.
 - `fetchCities` mengembalikan `data.map((d) => ({ id: String(d.id), name: String(d.lokasi) }))`.
 - `fetchDayTimes` membangun URL `${config.sholat.apiBase}/sholat/jadwal/${cityId}/${y}/${m}/${d}` dari `dateStr`; ambil **hanya** kunci `PRAYERS`; bila ada yang hilang → `throw`.
 - Jangan menyimpan hasil gagal ke cache.
