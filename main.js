@@ -14,6 +14,8 @@ import { PluginManager } from './lib/plugins.js';
 import { createApi } from './lib/api.js';
 import { createConnection } from './lib/connection.js';
 import * as Rent from './lib/rent.js';
+import * as Sholat from './lib/sholat.js';
+import { fetchDayTimes } from './lib/sholat-source.js';
 import { startHealthServer, writeStatus } from './lib/health.js';
 import { getOwnerMemory } from './lib/owner-ai.js';
 import { hasFfmpeg, hasYtDlp } from './lib/media.js';
@@ -174,6 +176,59 @@ if (config.rent?.enabled !== false) {
       }
     }
   }, config.rent.sweepIntervalMs).unref?.();
+}
+
+// ── Sweep jadwal sholat: kirim DM saat waktu sholat tiba ────────────────
+// Jadwal tiap kota di-cache per hari oleh lib/sholat-source.js, jadi satu kota
+// hanya memanggil API sekali sehari walau sweep berjalan tiap menit.
+if (config.sholat?.enabled !== false) {
+  let sholatSweepRunning = false;
+
+  setInterval(async () => {
+    const socket = globalThis.conn;
+    if (!socket || sholatSweepRunning) return;
+    if (!Object.keys(db.data.sholat || {}).length) return; // belum ada pelanggan
+
+    sholatSweepRunning = true;
+    try {
+      const now = Date.now();
+      const timesByCity = {};
+      const sudahDicoba = new Set();
+
+      for (const sub of Sholat.listActiveSubscriptions(db)) {
+        if (sudahDicoba.has(sub.cityId)) continue;
+        sudahDicoba.add(sub.cityId);
+
+        const timezone = sub.timezone || Sholat.timezoneForCity(sub.cityId);
+        if (!timezone) continue; // sweep akan mencatatnya sebagai 'unknown-timezone'
+
+        try {
+          const dateStr = Sholat.localParts(new Date(now), timezone).date;
+          timesByCity[sub.cityId] = (await fetchDayTimes(config, sub.cityId, dateStr)).times;
+        } catch (err) {
+          logger.warn(`[sholat] jadwal ${sub.cityId} gagal diambil: ${err.message}`);
+        }
+      }
+
+      const plan = Sholat.sweep(db, config, { now, timesByCity });
+      for (const item of plan.skipped) logger.debug(`[sholat] dilewati ${item.jid}: ${item.reason}`);
+
+      for (const send of plan.sends) {
+        try {
+          await socket.sendMessage(send.jid, { text: send.text });
+          // Ditandai hanya setelah benar-benar terkirim: DM yang gagal akan
+          // dicoba lagi siklus berikutnya selama masih dalam jendela toleransi.
+          Sholat.markSent(db, send);
+        } catch {
+          /* DM bisa gagal — tidak apa-apa */
+        }
+      }
+    } catch (err) {
+      logger.error(`[sholat] sweep: ${err.message}`);
+    } finally {
+      sholatSweepRunning = false;
+    }
+  }, config.sholat.sweepIntervalMs).unref?.();
 }
 
 // ── Mode tanpa koneksi (smoke test / cek instalasi) ─────────────────────
