@@ -9,6 +9,9 @@ import {
   unsubscribe,
   getSubscription,
   listActiveSubscriptions,
+  localParts,
+  duePrayers,
+  PRAYERS,
 } from '../lib/sholat.js';
 
 /** Daftar kota tiruan; dua entri bernama sama sengaja, seperti KOTA SOFIFI di API nyata. */
@@ -96,4 +99,41 @@ test('unsubscribe/getSubscription/listActiveSubscriptions', () => {
   assert.equal(unsubscribe(db, JID), true);
   assert.equal(unsubscribe(db, JID), false);
   assert.equal(getSubscription(db, JID), null);
+});
+
+const TIMES = { subuh: '04:15', dzuhur: '11:42', ashar: '14:48', maghrib: '17:49', isya: '18:58' };
+
+/** Instan UTC untuk jam WIB (UTC+7) pada 2026-10-17. */
+const wib = (h, m) => Date.parse(`2026-10-17T${String(h - 7).padStart(2, '0')}:${String(m).padStart(2, '0')}:00Z`);
+
+test('localParts menghitung jam lokal tiap zona', () => {
+  const at = Date.parse('2026-10-17T10:49:00Z');
+  assert.deepEqual(localParts(new Date(at), 'Asia/Jakarta'), { date: '2026-10-17', minutes: 17 * 60 + 49 });
+  assert.deepEqual(localParts(new Date(at), 'Asia/Makassar'), { date: '2026-10-17', minutes: 18 * 60 + 49 });
+  assert.deepEqual(localParts(new Date(at), 'Asia/Jayapura'), { date: '2026-10-17', minutes: 19 * 60 + 49 });
+});
+
+test('duePrayers: sebelum waktu tidak muncul, dalam toleransi muncul, lewat toleransi dibuang', () => {
+  const sub = { timezone: 'Asia/Jakarta', sent: { date: '2026-10-17', keys: [] } };
+  assert.deepEqual(duePrayers(sub, TIMES, { now: wib(17, 45), graceMinutes: 30 }), []);
+  assert.deepEqual(duePrayers(sub, TIMES, { now: wib(17, 49), graceMinutes: 30 }), ['maghrib']);
+  assert.deepEqual(duePrayers(sub, TIMES, { now: wib(18, 19), graceMinutes: 30 }), ['maghrib']);
+  // Bot hidup setelah beberapa waktu lewat sekaligus -> hanya yang masih dalam jendela.
+  assert.deepEqual(duePrayers(sub, TIMES, { now: wib(18, 20), graceMinutes: 30 }), []);
+  assert.deepEqual(duePrayers(sub, TIMES, { now: wib(20, 30), graceMinutes: 30 }), []);
+});
+
+test('duePrayers: yang sudah terkirim hari ini tidak muncul lagi, dan tanggal baru mereset', () => {
+  const sudah = { timezone: 'Asia/Jakarta', sent: { date: '2026-10-17', keys: ['maghrib'] } };
+  assert.deepEqual(duePrayers(sudah, TIMES, { now: wib(17, 49), graceMinutes: 30 }), []);
+  const hariBaru = { timezone: 'Asia/Jakarta', sent: { date: '2026-10-16', keys: ['maghrib'] } };
+  assert.deepEqual(duePrayers(hariBaru, TIMES, { now: wib(17, 49), graceMinutes: 30 }), ['maghrib']);
+});
+
+test('duePrayers: waktu rusak/kosong dilewati tanpa merusak waktu lain', () => {
+  const rusak = { ...TIMES, dzuhur: '', ashar: 'xx:yy', maghrib: undefined };
+  const sub = { timezone: 'Asia/Jakarta', sent: { date: '2026-10-17', keys: [] } };
+  assert.deepEqual(duePrayers(sub, rusak, { now: wib(17, 49), graceMinutes: 30 }), []);
+  const jamPenuh = { ...rusak, isya: '17:49' };
+  assert.deepEqual(duePrayers(sub, jamPenuh, { now: wib(17, 49), graceMinutes: 30 }), ['isya']);
 });
