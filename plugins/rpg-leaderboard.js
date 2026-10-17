@@ -3,14 +3,14 @@
  *   .leaderboard        -> berdasarkan exp
  *   .leaderboard saldo  -> berdasarkan saldo
  */
-import { bareNumber } from '../lib/functions.js';
+import { userDisplayName } from '../lib/messages.js';
 
 const handler = async (m, { args, db, config }) => {
   const metric = (args[0] || 'exp').toLowerCase();
   const field = ['saldo', 'balance', 'uang'].includes(metric) ? 'saldo' : metric === 'level' ? 'level' : 'exp';
 
   const users = Object.entries(db.data.users)
-    .map(([jid, user]) => ({ jid, value: Number(user[field]) || 0, name: user.name || '' }))
+    .map(([jid, user]) => ({ jid, value: Number(user[field]) || 0, name: userDisplayName(user, jid) }))
     .filter((item) => item.value > 0)
     .sort((a, b) => b.value - a.value)
     .slice(0, 10);
@@ -19,7 +19,7 @@ const handler = async (m, { args, db, config }) => {
 
   const medals = ['🥇', '🥈', '🥉'];
   const rows = users.map(
-    (item, index) => `${medals[index] || `${index + 1}.`} ${item.name || bareNumber(item.jid)} — *${item.value.toLocaleString('id-ID')}*`,
+    (item, index) => `${medals[index] || `${index + 1}.`} ${item.name} — *${item.value.toLocaleString('id-ID')}*`,
   );
 
   return m.reply(`🏆 *LEADERBOARD ${field.toUpperCase()}*\n\n${rows.join('\n')}`);

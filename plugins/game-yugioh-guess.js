@@ -14,6 +14,7 @@
  */
 import { ensureQuiz, getQuiz } from '../lib/quiz-instance.js';
 import { consumeLimit } from '../lib/permissions.js';
+import { userDisplayName } from '../lib/messages.js';
 
 const handler = async (m, { conn, args, config, db, user, isAdmin, isOwner, command, usedPrefix }) => {
   const engine = ensureQuiz(conn, config, db);
@@ -64,7 +65,7 @@ const handler = async (m, { conn, args, config, db, user, isAdmin, isOwner, comm
 
   if (/^(yugoscore|toptebak)$/i.test(command)) {
     const rows = Object.entries(db.data.users)
-      .map(([jid, item]) => ({ jid, wins: Number(item.ygoWins) || 0, saldo: Number(item.saldo) || 0, name: item.name || '' }))
+      .map(([jid, item]) => ({ jid, wins: Number(item.ygoWins) || 0, saldo: Number(item.saldo) || 0, name: userDisplayName(item, jid) }))
       .filter((item) => item.wins > 0)
       .sort((a, b) => b.wins - a.wins || b.saldo - a.saldo)
       .slice(0, 10);
@@ -76,7 +77,7 @@ const handler = async (m, { conn, args, config, db, user, isAdmin, isOwner, comm
       [
         '🏆 *PAPAN SKOR TEBAK KARTU*',
         '',
-        ...rows.map((item, index) => `${medals[index] || `${index + 1}.`} ${item.name || item.jid.split('@')[0]} — ${item.wins} benar`),
+        ...rows.map((item, index) => `${medals[index] || `${index + 1}.`} ${item.name} — ${item.wins} benar`),
         '',
         'Tebak terus untuk naik peringkat!',
       ].join('\n'),

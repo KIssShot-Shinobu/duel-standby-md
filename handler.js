@@ -197,6 +197,17 @@ export async function handleMessage(conn, raw, deps) {
   const isAdmin = participants.length ? Perm.isParticipantAdmin(groupMetadata, m.sender, senderIds) : false;
   const isBotAdmin = participants.length ? Perm.isParticipantAdmin(groupMetadata, conn.user?.id) : false;
   const user = db.user(m.sender);
+  // Simpan nama WhatsApp pengirim. Ini satu-satunya sumber nama user yang bisa
+  // diandalkan: Baileys tidak mengirim daftar kontak (syncFullHistory: false)
+  // dan groupMetadata hanya memuat { id, jid, lid, admin + status admin } tanpa
+  // nama. Kalau tidak disimpan di sini, nama hanya hidup di cache memori
+  // (conn.setName di lib/connection.js) lalu hilang tiap restart — dan semua
+  // tampilan yang butuh nama (papan peringkat, kartu profil) jatuh ke nomor.
+  // Field terpisah dari `name` supaya nama hasil `.main-info` tidak tertimpa.
+  if (m.pushName && user.pushName !== m.pushName) {
+    user.pushName = m.pushName;
+    db.touch();
+  }
   const isPremium = Perm.isPremiumUser(user, m.sender, config);
 
   const flags = { isOwner, isMods, isAdmin, isBotAdmin, isPremium, isBanned: Perm.isBanned(user), participants, groupMetadata };

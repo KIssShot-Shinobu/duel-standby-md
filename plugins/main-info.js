@@ -9,7 +9,7 @@ import { bareNumber, resolveUserTarget } from '../lib/functions.js';
 import { userError } from '../lib/errors.js';
 import { hasFfmpeg, hasYtDlp } from '../lib/media.js';
 import { isPremiumUser, levelProgress, limitQuota, refreshLimit } from '../lib/permissions.js';
-import { profileText, botInfo, ok, err, friendlyNumber } from '../lib/messages.js';
+import { profileText, botInfo, ok, err, userDisplayName } from '../lib/messages.js';
 
 const handler = async (m, { conn, text, args, command, config, db, plugins, user, runtime, chatData, isOwner }) => {
   if (/^(daftar|register|reg)$/i.test(command)) {
@@ -53,7 +53,7 @@ const handler = async (m, { conn, text, args, command, config, db, plugins, user
 
     return m.reply(
       profileText({
-        name: profile.name || (isSelf ? m.pushName : friendlyNumber(targetJid)) || '-',
+        name: profile.name || (isSelf ? m.pushName : userDisplayName(profile, targetJid)) || '-',
         age: profile.age,
         registered: profile.registered,
         premium: premiumActive,
