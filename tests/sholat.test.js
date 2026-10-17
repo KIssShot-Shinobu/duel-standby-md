@@ -200,6 +200,15 @@ test('markSent idempoten dan reset saat tanggal berganti', () => {
   assert.deepEqual(getSubscription(db, JKT).sent, { date: '2026-10-18', keys: ['subuh'] });
 });
 
+test('markSent: record rusak (sent tanpa keys) diperbaiki, bukan melempar', () => {
+  const db = fakeDb();
+  subscribe(db, JKT, CITIES[0], { now: 0 });
+  db.data.sholat[JKT].sent = { date: '2026-10-17' }; // hasil sunting manual
+
+  assert.equal(markSent(db, { jid: JKT, prayer: 'maghrib', date: '2026-10-17' }), true);
+  assert.deepEqual(getSubscription(db, JKT).sent, { date: '2026-10-17', keys: ['maghrib'] });
+});
+
 test('buildMessage & formatTimes: teks persis seperti spec', () => {
   const sub = { cityName: 'KOTA JAKARTA', timezone: 'Asia/Jakarta' };
   assert.equal(
