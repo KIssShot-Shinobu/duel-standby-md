@@ -190,13 +190,15 @@ export async function handleMessage(conn, raw, deps) {
     );
   }
 
+  const user = db.user(m.sender);
   const isOwner = Perm.isOwner(m.sender, config);
-  const isMods = Perm.isMods(m.sender, config);
+  // Moderator: diakui dari daftar `config.bot.mods` (env) maupun `user.role`
+  // yang diatur owner lewat `.mod add` — lihat lib/permissions.js -> isMods.
+  const isMods = Perm.isMods(m.sender, config, user);
   // Identitas bisa datang sebagai LID atau nomor telepon — cocokkan keduanya.
   const senderIds = [m.sender, m.senderLid, m.senderAlt];
   const isAdmin = participants.length ? Perm.isParticipantAdmin(groupMetadata, m.sender, senderIds) : false;
   const isBotAdmin = participants.length ? Perm.isParticipantAdmin(groupMetadata, conn.user?.id) : false;
-  const user = db.user(m.sender);
   // Simpan nama WhatsApp pengirim. Ini satu-satunya sumber nama user yang bisa
   // diandalkan: Baileys tidak mengirim daftar kontak (syncFullHistory: false)
   // dan groupMetadata hanya memuat { id, jid, lid, admin + status admin } tanpa
@@ -282,7 +284,9 @@ export async function handleMessage(conn, raw, deps) {
   // 4) Gating
   if (config.bot.mode === 'self' && !isOwner && !isMods) return { handled: false, reason: 'self-mode', reward };
   if (config.flags.pcOnly && isGroup) return { handled: false, reason: 'pconly', reward };
-  if (config.flags.gcOnly && !isGroup) return { handled: false, reason: 'gconly', reward };
+  // `--gconly` mematikan DM untuk semua orang — moderator tetap dilayani supaya
+  // dia bisa memakai bot lewat DM di mana pun (keputusan owner).
+  if (config.flags.gcOnly && !isGroup && !isMods) return { handled: false, reason: 'gconly', reward };
 
   // Menu config: command/kategori yang dimatikan owner tidak boleh dijalankan.
   const commandOn = commandState(db, entry.name).enabled;
@@ -310,7 +314,7 @@ export async function handleMessage(conn, raw, deps) {
 
   // Gating sewa: grup tanpa sewa aktif terkunci (kecuali plugin free / main /
   // grup owner). Lihat lib/rent.js untuk daftar plugin yang dikecualikan.
-  if (isGroup && Rent.isGroupGated(db, m.chat, entry.name, config, { participants, isOwner })) {
+  if (isGroup && Rent.isGroupGated(db, m.chat, entry.name, config, { participants, isOwner, isMods })) {
     await m.reply(Rent.rentSettings(db, config).gatedMessage).catch(() => {});
     return { handled: false, reason: 'rent-gated', reward };
   }
@@ -320,7 +324,7 @@ export async function handleMessage(conn, raw, deps) {
     await m.reply(config.messages.owner).catch(() => {});
     return { handled: false, reason: 'need-owner' };
   }
-  if (plugin.premium && !isPremium) {
+  if (plugin.premium && !isPremium && !isMods) {
     await m.reply(config.messages.premium).catch(() => {});
     return { handled: false, reason: 'need-premium' };
   }
@@ -340,7 +344,7 @@ export async function handleMessage(conn, raw, deps) {
     await m.reply(config.messages.private).catch(() => {});
     return { handled: false, reason: 'need-private' };
   }
-  if (plugin.register && !ctx.user.registered) {
+  if (plugin.register && !ctx.user.registered && !isMods) {
     await m.reply(config.messages.register).catch(() => {});
     return { handled: false, reason: 'need-register' };
   }
@@ -350,8 +354,10 @@ export async function handleMessage(conn, raw, deps) {
   ctx.limitCost = limitInfo.cost;
   ctx.limitMode = limitInfo.mode;
 
-  // Biaya limit: penyewa aktif (unlimited global) dilewati.
-  const limit = Rent.isRenterActive(db, m.sender, config)
+  // Biaya limit: moderator bebas limit (di grup maupun DM) — begitu juga penyewa
+  // aktif yang sewanya masih berjalan.
+  const unlimited = isMods || Rent.isRenterActive(db, m.sender, config);
+  const limit = unlimited
     ? { ok: true, limit: Number.MAX_SAFE_INTEGER, cost: limitInfo.cost }
     : Perm.consumeLimitCost(db, user, limitInfo.cost, config);
   if (!limit.ok) {

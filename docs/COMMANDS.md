@@ -1,6 +1,6 @@
 # Daftar Command
 
-> Dibuat otomatis oleh `npm run commands -- --markdown` — 59 plugin, 179 command.
+> Dibuat otomatis oleh `npm run commands -- --markdown` — 64 plugin, 184 command.
 > Prefix default: `.` (lihat `PREFIX` di `.env`).
 
 ## ai
@@ -31,8 +31,8 @@
 
 | Command | Keterangan syarat | File |
 |---|---|---|
+| `.animequote`, `.aquote`, `.quoteanime` | 1 limit | `anime-quote.js` |
 | `.quote`, `.quotes` | — | `fun-quote.js` |
-| `.kick`, `.hug`, `.kiss`, `.slap`, `.pat`, `.cuddle`, `.poke`, `.tickle`, `.highfive`, `.bite`, `.bonk`, `.feed`, `.wave`, `.blush`, `.smile`, `.wink`, `.stare`, `.facepalm`, `.yeet`, `.carry`, `.tendang`, `.peluk`, `.cium`, `.tampar`, `.sayang`, `.peluk2`, `.colok`, `.gelitik`, `.high5`, `.gigit`, `.lempar`, `.angkat`, `.reactionlist` | 1 limit | `reaction-gif.js` |
 
 ## game
 
@@ -73,7 +73,13 @@
 
 | Command | Keterangan syarat | File |
 |---|---|---|
-| `.tqto`, `.credit` | — | `info-tqto.js` |
+| `.credit`, `.tqto` | — | `info-tqto.js` |
+
+## islami
+
+| Command | Keterangan syarat | File |
+|---|---|---|
+| `.sholat` | — | `sholat.js` |
 
 ## main
 
@@ -82,7 +88,7 @@
 | `.info`, `.profile`, `.profil`, `.daftar` | — | `main-info.js` |
 | `.menu`, `.help`, `.bantuan` | — | `main-menu.js` |
 | `.ping`, `.speed` | — | `main-ping.js` |
-| `.rent`, `.sewa`, `.rentstatus`, `.renew`, `.grouplist` | Owner: `.rent approve|add <id grup> [nomor penyewa] [hari]`; nomor opsional untuk group-only | `rent.js` |
+| `.rent`, `.sewa`, `.rentstatus`, `.renew`, `.grouplist` | — | `rent.js` |
 
 ## nsfw
 
@@ -97,9 +103,16 @@
 | `.broadcast` | owner | `owner-broadcast.js` |
 | `.limitset`, `.limitcmd`, `.limitcat` | owner | `owner-limit.js` |
 | `.menuset`, `.category`, `.cmdset` | owner | `owner-menu.js` |
+| `.mod` | owner | `owner-mod.js` |
 | `.mode` | owner | `owner-mode.js` |
 | `.restart` | owner | `owner-restart.js` |
 | `.premium`, `.ban`, `.unban`, `.limit`, `.resetlimit` | owner | `owner-user.js` |
+
+## reaction
+
+| Command | Keterangan syarat | File |
+|---|---|---|
+| `.kick`, `.hug`, `.kiss`, `.slap`, `.pat`, `.cuddle`, `.poke`, `.tickle`, `.highfive`, `.bite`, `.bonk`, `.feed`, `.wave`, `.blush`, `.smile`, `.wink`, `.stare`, `.facepalm`, `.yeet`, `.carry`, `.tendang`, `.peluk`, `.cium`, `.tampar`, `.sayang`, `.peluk2`, `.colok`, `.gelitik`, `.high5`, `.gigit`, `.lempar`, `.angkat`, `.reactionlist` | 1 limit | `reaction-gif.js` |
 
 ## rpg
 
@@ -129,5 +142,8 @@
 | `.afk` | — | `_afk.js` |
 | _(event otomatis)_ | — | `_antilink.js` |
 | _(event otomatis)_ | — | `_antispam.js` |
+| _(event otomatis)_ | — | `_dm-intro.js` |
+| _(event otomatis)_ | — | `_reaction-loader.js` |
 | _(event otomatis)_ | — | `_rent-guard.js` |
 | _(event otomatis)_ | — | `_welcome.js` |
+
