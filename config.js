@@ -247,7 +247,7 @@ export const config = {
     /** H-berapa sebelum expired bot mengingatkan penyewa (sekali per periode) */
     reminderDays: envList('RENT_REMINDER_DAYS', ['3', '1']).map((x) => Number(x)),
     /** plugin yang selalu free (prefix nama file plugin) */
-    freePlugins: ['game-yugioh', 'tools-sticker', 'sticker-', 'tools-toimg'],
+    freePlugins: ['game-yugioh', 'tools-sticker', 'sticker-', 'tools-toimg', 'sholat'],
     /** plugin yang tidak pernah dikunci */
     alwaysAllowed: ['main-', 'owner-', 'rent.js', '_rent-guard'],
     /** pesan saat command terkunci karena grup tidak punya sewa aktif */
