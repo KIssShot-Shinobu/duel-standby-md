@@ -78,3 +78,38 @@ test('fetchDayTimes melempar bila field jadwal kurang', async () => {
   const json = stub({ status: true, data: { jadwal: { subuh: '04:15', dzuhur: '11:42' } } });
   await assert.rejects(() => fetchDayTimes(CFG, '1301', '2026-10-17', { json }));
 });
+
+test('fetchCities memakai katalog cache yang sudah kedaluwarsa bila pengambilan gagal', async () => {
+  clearCache();
+  const waktuAsli = Date.now;
+  let sekarang = waktuAsli();
+  Date.now = () => sekarang;
+  try {
+    const isi = stub({ status: true, data: [{ id: '1301', lokasi: 'KOTA JAKARTA' }] });
+    await fetchCities(CFG, { json: isi });
+
+    // Lewati TTL (7 hari) lalu matikan API: katalog lama harus tetap dipakai
+    // supaya user tidak kehilangan kemampuan mendaftar karena gangguan sesaat.
+    sekarang += 8 * 24 * 60 * 60 * 1000;
+    const hasil = await fetchCities(CFG, {
+      json: async () => {
+        throw new Error('API mati');
+      },
+    });
+    assert.deepEqual(hasil, [{ id: '1301', name: 'KOTA JAKARTA' }]);
+  } finally {
+    Date.now = waktuAsli;
+    clearCache();
+  }
+});
+
+test('fetchCities melempar bila API gagal dan belum ada cache sama sekali', async () => {
+  clearCache();
+  await assert.rejects(() =>
+    fetchCities(CFG, {
+      json: async () => {
+        throw new Error('API mati');
+      },
+    }),
+  );
+});

@@ -25,18 +25,28 @@ const DEFAULT_CITIES = [
 ];
 
 /** Tiruan MyQuran API v2 — di localhost supaya test tidak menyentuh jaringan nyata. */
-async function startFakeApi({ cities = DEFAULT_CITIES } = {}) {
+async function startFakeApi({ cities = DEFAULT_CITIES, failCities = false, failJadwal = false } = {}) {
   const server = http.createServer((req, res) => {
     const url = req.url || '';
     res.setHeader('content-type', 'application/json');
 
     if (url.startsWith('/v2/sholat/kota/semua')) {
+      if (failCities) {
+        res.statusCode = 500;
+        res.end('{}');
+        return;
+      }
       res.end(JSON.stringify({ status: true, data: cities }));
       return;
     }
 
     const match = url.match(/^\/v2\/sholat\/jadwal\/(\d+)\//);
     if (match) {
+      if (failJadwal) {
+        res.statusCode = 500;
+        res.end('{}');
+        return;
+      }
       res.end(
         JSON.stringify({
           status: true,
@@ -75,8 +85,8 @@ async function startFakeApi({ cities = DEFAULT_CITIES } = {}) {
   };
 }
 
-async function setup({ cities } = {}) {
-  const api = await startFakeApi({ cities });
+async function setup({ cities, failCities, failJadwal } = {}) {
+  const api = await startFakeApi({ cities, failCities, failJadwal });
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rtxzy-sholat-plug-'));
   const db = new Database(path.join(dir, 'db.json'), { saveInterval: 5000, logger: quiet });
   db.load();
@@ -124,8 +134,8 @@ async function setup({ cities } = {}) {
 }
 
 /** Jalankan test dengan harness + pembersihan yang selalu jalan (walau assertion gagal). */
-async function withHarness(t, { cities } = {}, run) {
-  const ctx = await setup({ cities });
+async function withHarness(t, { cities, failCities, failJadwal } = {}, run) {
+  const ctx = await setup({ cities, failCities, failJadwal });
   t.after(() => ctx.close());
   return run(ctx, { plugins: ctx.plugins, db: ctx.db, config: ctx.config, logger: quiet });
 }
@@ -244,23 +254,72 @@ test('.sholat stop: menghapus langganan', async (t) => {
   });
 });
 
-test('nama daerah terlalu umum: kandidat dibatasi maxCandidates, bukan 20 baris', async (t) => {
-  const cities = Array.from({ length: 20 }, (_, index) => ({
-    id: `32${String(index + 1).padStart(2, '0')}`,
-    lokasi: `KOTA UJI ${index + 1}`,
-  }));
+test('nama daerah terlalu umum: jadi daftar kandidat terbatas, bukan satu daerah diam-diam', async (t) => {
+  // Bentuk katalog MyQuran sungguhan: satu nama BERAKHIRAN "KOTA"
+  // (KAB. LIMA PULUH KOTA — yang dulu langsung dipilih diam-diam) plus banyak
+  // nama lain yang juga memuat kata "KOTA".
+  const cities = [
+    { id: '0304', lokasi: 'KAB. LIMA PULUH KOTA' },
+    ...Array.from({ length: 20 }, (_, index) => ({
+      id: `32${String(index + 1).padStart(2, '0')}`,
+      lokasi: `KOTA UJI ${index + 1}`,
+    })),
+  ];
 
   await withHarness(t, { cities }, async (ctx, opts) => {
-    await handleMessage(ctx.conn, dmMsg('.sholat daftar uji'), opts);
+    await handleMessage(ctx.conn, dmMsg('.sholat daftar kota'), opts);
 
     const text = reply(ctx.sent, SENDER);
+    assert.equal(
+      ctx.db.data.sholat[SENDER],
+      undefined,
+      'daerah umum tidak boleh langsung dijadikan langganan',
+    );
     assert.equal(
       (text.match(/•/g) || []).length,
       ctx.config.sholat.maxCandidates,
       'hanya maxCandidates baris ditampilkan',
     );
-    assert.match(text, /dan 10 lainnya/);
+    assert.match(text, /dan 11 lainnya/);
+    assert.match(text, /terlalu umum/i);
+  });
+});
+
+test('API katalog mati: balasan ramah, bukan error mentah', async (t) => {
+  await withHarness(t, { failCities: true }, async (ctx, opts) => {
+    const result = await handleMessage(ctx.conn, dmMsg('.sholat daftar makassar'), opts);
+
+    assert.equal(result.handled, true);
+    assert.match(reply(ctx.sent, SENDER), /tidak bisa diambil/i);
     assert.equal(ctx.db.data.sholat[SENDER], undefined);
+  });
+});
+
+test('API jadwal mati: tidak berlangganan setengah jalan', async (t) => {
+  await withHarness(t, { failJadwal: true }, async (ctx, opts) => {
+    await handleMessage(ctx.conn, dmMsg('.sholat daftar makassar'), opts);
+
+    assert.match(reply(ctx.sent, SENDER), /tidak bisa diambil/i);
+    assert.equal(ctx.db.data.sholat[SENDER], undefined, 'langganan baru dibuat setelah jadwal didapat');
+  });
+});
+
+test('pengirim ber-LID: langganan disimpan di nomor telepon aslinya', async (t) => {
+  await withHarness(t, {}, async (ctx, opts) => {
+    // "LID yang dipaksakan jadi nomor" — persis kasus yang ditangani
+    // db.resolveIdentity; tanpa itu langganan tersimpan di record hantu.
+    const lidAsPn = '271446714642565@s.whatsapp.net';
+    ctx.db.data.lidMap[lidAsPn] = SENDER;
+
+    await handleMessage(ctx.conn, dmMsg('.sholat daftar makassar', lidAsPn), opts);
+
+    assert.equal(ctx.db.data.sholat[lidAsPn], undefined, 'tidak boleh pakai jid hantu');
+    assert.equal(ctx.db.data.sholat[SENDER]?.cityId, '2622');
+
+    // Dan `.sholat stop` dari nomor aslinya menemukan langganan itu.
+    await handleMessage(ctx.conn, dmMsg('.sholat stop', SENDER), opts);
+    assert.equal(ctx.db.data.sholat[SENDER], undefined);
+    assert.match(lastReply(ctx.sent, SENDER), /dihentikan/i);
   });
 });
 

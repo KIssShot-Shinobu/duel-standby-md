@@ -86,15 +86,17 @@ GET /v2/sholat/jadwal/{id}/{yyyy}/{mm}/{dd}
 
 ```
 plugins/sholat.js       I/O pengguna: .sholat [daftar|jadwal|stop]
+lib/sholat-runner.js    I/O: orkestrasi sweep (ambil jadwal -> kirim DM -> tandai)
 lib/sholat-source.js    I/O jaringan: panggil MyQuran + cache (dapat di-stub saat test)
 lib/sholat.js           LOGIKA MURNI + helper langganan (jam disuntik { now, times })
-main.js                 setInterval sweep -> kirim DM (meniru sweep sewa)
+main.js                 setInterval -> panggil runner (meniru sweep sewa)
 config.js               blok config.sholat (semua dapat di-override via env)
 lib/database.js         koleksi baru db.data.sholat
 tests/sholat.test.js    unit test logika murni
+tests/sholat-runner.test.js  test orkestrasi: urutan "kirim dulu, tandai kemudian" (D4)
 ```
 
-**Prinsip pemisahan:** `lib/sholat.js` tidak pernah memanggil jaringan. Ia menerima data jadwal sebagai argumen, sehingga bisa diuji sepenuhnya dengan jam palsu dan jadwal palsu. `lib/sholat-source.js` adalah satu-satunya modul yang menyentuh `fetch`. `main.js` yang menjembatani keduanya, persis seperti `sweepRentals` yang mengembalikan rencana lalu `main.js` yang mengirim.
+**Prinsip pemisahan:** `lib/sholat.js` tidak pernah memanggil jaringan. Ia menerima data jadwal sebagai argumen, sehingga bisa diuji sepenuhnya dengan jam palsu dan jadwal palsu. `lib/sholat-source.js` adalah satu-satunya modul yang menyentuh `fetch`. `lib/sholat-runner.js` yang menjembatani keduanya, persis seperti `sweepRentals` yang mengembalikan rencana lalu pemanggilnya yang mengirim. Runner dipisah dari `main.js` (yang tidak bisa diimpor test karena langsung menyambung ke WhatsApp) supaya jaminan D4 bisa diuji: DM yang gagal tidak ditandai terkirim dan dicoba lagi siklus berikutnya.
 
 ## 7. Model data
 
@@ -278,18 +280,20 @@ sholat: {
 
 ## 14. Strategi test
 
-Test dibagi tiga berkas sesuai tanggung jawab.
+Test dibagi empat berkas sesuai tanggung jawab.
 
 **`tests/sholat.test.js`** — logika murni, gaya `tests/rent.test.js` (db palsu + jam disuntik, tanpa jaringan):
 
-1. `resolveCity` — cocok persis, cocok sebagian, **ambigu (`KOTA SOFIFI`)**, tak ditemukan, dan pencocokan via id.
+1. `resolveCity` — cocok persis, cocok sebagian, **ambigu (`KOTA SOFIFI`)**, nama daerah umum tidak boleh jadi satu pilihan, tak ditemukan, dan pencocokan via id.
 2. `timezoneForCity` — Jakarta/WIB, Denpasar/WITA, Jayapura/WIT, Pontianak/WIB (batas), kode tak dikenal → `null`.
 3. `duePrayers` — sebelum waktu (kosong), tepat/lewat dalam toleransi (muncul), lewat toleransi (kosong), sudah ada di `sent.keys` (kosong).
 4. `sweep` — menghasilkan rencana kirim yang benar untuk beberapa pelanggan di zona berbeda.
 5. Restart/duplikasi — pelanggan dengan `sent` terisi tidak dikirim ulang.
 6. D1/D2/D3/D4 sebagai kasus eksplisit.
 7. `formatTimes` — isi pesan sesuai contoh.
-**`tests/sholat-source.test.js`** — parsing payload API dengan `fetch` yang di-stub; cache hit tidak memanggil ulang; error/timeout tidak melempar keluar.
+**`tests/sholat-source.test.js`** — parsing payload API dengan `fetch` yang di-stub; cache hit tidak memanggil ulang; error/timeout tidak melempar keluar; katalog lama tetap dipakai bila pengambilan gagal.
+
+**`tests/sholat-runner.test.js`** — orkestrasi sweep dengan socket palsu: DM sukses ditandai terkirim, **DM gagal tidak ditandai** dan dicoba lagi siklus berikutnya (D4), pelanggan tanpa zona waktu dilewati + dilaporkan, dan kegagalan satu kota tidak menghentikan pelanggan lain.
 
 **`tests/sholat-plugins.test.js`** — perintah `.sholat` end-to-end lewat `handleMessage`, dengan server HTTP lokal sebagai tiruan MyQuran (gaya `tests/rent-plugins.test.js`).
 
@@ -297,8 +301,8 @@ Verifikasi menyeluruh sebelum selesai: `npm test` dan `npm run check`.
 
 ## 15. File tersentuh
 
-**Baru:** `lib/sholat.js` · `lib/sholat-source.js` · `plugins/sholat.js` · `tests/sholat.test.js` · `tests/sholat-source.test.js` · `tests/sholat-plugins.test.js` · dokumen ini
-**Diubah:** `main.js` (+sweep) · `config.js` (+blok `sholat`) · `lib/database.js` (+koleksi `sholat` + loop normalisasi) · `.env.example` (+variabel `SHOLAT_*`)
+**Baru:** `lib/sholat.js` · `lib/sholat-source.js` · `lib/sholat-runner.js` · `plugins/sholat.js` · `tests/sholat.test.js` · `tests/sholat-source.test.js` · `tests/sholat-runner.test.js` · `tests/sholat-plugins.test.js` · dokumen ini
+**Diubah:** `main.js` (+panggil sweep) · `config.js` (+blok `sholat`) · `lib/database.js` (+koleksi `sholat` + loop normalisasi) · `.env.example` (+variabel `SHOLAT_*`)
 
 ## 16. Risiko & catatan terbuka
 

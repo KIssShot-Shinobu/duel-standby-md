@@ -29,6 +29,10 @@ const CITIES = [
   { id: '3212', name: 'KOTA SOFIFI' },
   { id: '1201', name: 'KAB. BANDUNG' },
   { id: '1219', name: 'KOTA BANDUNG' },
+  // Nama "aneh" yang ada di katalog MyQuran sungguhan: satu-satunya nama yang
+  // BERAKHIRAN "KOTA". Inilah yang dulu membuat input "kota" diam-diam
+  // dianggap satu daerah, padahal banyak nama lain juga memuat kata "kota".
+  { id: '0304', name: 'KAB. LIMA PULUH KOTA' },
 ];
 
 test('timezoneForCity: WIB/WITA/WIT termasuk batas Kalimantan Barat', () => {
@@ -53,6 +57,14 @@ test('resolveCity: id, cocok kata utuh, ambiguitas, dan batas kata', () => {
   assert.equal(resolveCity(CITIES, 'arta'), null); // 'KOTA JAKARTA' TIDAK boleh cocok sebagian kata
   assert.equal(resolveCity(CITIES, 'ngawur'), null);
   assert.equal(resolveCity(CITIES, ''), null);
+
+  // Input umum harus jadi daftar kandidat, bukan satu daerah yang dipilih
+  // diam-diam. Dulu tier "berakhiran" menang lebih dulu: 'kota' langsung
+  // mengembalikan KAB. LIMA PULUH KOTA tanpa melihat 8 nama KOTA* lain.
+  const kota = resolveCity(CITIES, 'kota');
+  assert.equal(kota.city, undefined, 'input umum tidak boleh jadi satu daerah');
+  assert.ok(kota.ambiguous.length > 1, 'harus berupa daftar kandidat');
+  assert.ok(kota.ambiguous.some((entry) => entry.id === '1301'), 'kandidat memuat KOTA JAKARTA');
 });
 
 const JID = '628111@s.whatsapp.net';

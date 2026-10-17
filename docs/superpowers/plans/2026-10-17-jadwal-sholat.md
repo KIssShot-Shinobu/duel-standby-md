@@ -20,7 +20,7 @@
 - **Pengiriman hanya DM.** Perintah boleh dipakai di DM maupun grup, tetapi langganan selalu melekat pada pengirim.
 - **`graceMinutes` default 30**, **`sweepIntervalMs` default 60000**.
 - **Zona waktu:** peta **34 kode provinsi → WIB/WITA/WIT**. Dilarang menebak: kode tak dikenal → `null` → pelanggan **dilewati + dicatat** (jangan dikirim dengan jam yang mungkin salah 1–2 jam).
-- **Kunci `db.data.sholat`** = `m.sender` apa adanya. `handler.js` sudah menyelesaikan LID→nomor telepon sebelum plugin dipanggil (baris 122–131), jadi **jangan** panggil `db.resolveIdentity` lagi.
+- **Kunci `db.data.sholat`** = `db.resolveIdentity(m.sender)` — sama seperti `db.user()` (`lib/database.js:229`). `handler.js:122–131` hanya menyelesaikan bentuk `@lid`; bentuk **"LID yang dipaksakan jadi nomor"** (`271446714642565@s.whatsapp.net`) hanya ditangani `resolveIdentity` lewat `lidMap`. Tanpa ini langganan tersimpan di record hantu: sweep tetap mengirim DM, tapi `.sholat stop` tidak menemukan langganannya (spec §7 & risiko #4).
 - **Tanggal** selalu format `'YYYY-MM-DD'`; **waktu** selalu `'HH:MM'` (24 jam, tanpa detik).
 - **Non-tujuan:** tanpa audio adzan, tanpa pilihan per-waktu, tanpa pengingat sebelum adzan, tanpa kalender hijriah, tanpa broadcast ke grup.
 - **Tag plugin:** `['islami']` (label menu jatuh ke `tag.toUpperCase()` di `plugins/main-menu.js:30` — tidak perlu mengubah `lib/menu-config.js`).
@@ -29,11 +29,11 @@
 
 Lima hal yang diimplikasikan spec tetapi tidak otomatis terjaga oleh test tiap task. Masing-masing dipasangkan ke test di task pemiliknya:
 
-1. **Daerah terlalu umum** (mis. `.sholat daftar kota`) → ratusan kandidat. Harus dibatasi (`maxCandidates`) + "dan N lainnya", bukan pesan raksasa. → Task 8.
-2. **Zona waktu tak dikenal** (kode provinsi di luar peta) → pelanggan dilewati, tercatat di `skipped`, tidak crash, tidak dikirim dengan jam tebakan. → Task 6.
+1. **Daerah terlalu umum** (mis. `.sholat daftar kota`) → ratusan kandidat. Harus dibatasi (`maxCandidates`) + "dan N lainnya", bukan pesan raksasa — **dan tidak boleh diam-diam berhenti di satu daerah**. → Task 3 & Task 8.
+2. **Zona waktu tak dikenal** (kode provinsi di luar peta) → pelanggan dilewati, tercatat di `skipped` **dan dilaporkan di log**, tidak crash, tidak dikirim dengan jam tebakan. → Task 6 & Task 9.
 3. **Bot start setelah beberapa waktu sholat terlewat sekaligus** → hanya yang masih dalam 30 menit yang dikirim; sisanya dibuang. → Task 5.
-4. **Field jadwal API tidak valid/kosong** (`'HH:MM'` rusak) → waktu itu dilewati, waktu lain tetap terkirim. → Task 5.
-5. **Dua pelanggan di zona berbeda pada menit yang sama** → masing-masing memakai zona waktunya sendiri, bukan zona server. → Task 6.
+4. **Field jadwal API tidak valid/kosong** (`'HH:MM'` rusak) → waktu itu dilewati, waktu lain tetap terkirim; respons yang tidak lengkap membuat kota itu dilewati siklus ini (bukan dikirim dengan jadwal separuh). → Task 5 & Task 7.
+5. **Dua pelanggan di zona berbeda pada menit yang sama** → masing-masing memakai zona waktunya sendiri, bukan zona server. → Task 6 & Task 9.
 
 ---
 
@@ -251,12 +251,12 @@ Aturan yang harus dipenuhi (semua sudah dipatok test di Step 1):
 
 - `timezoneForCity(cityId)`: ambil 2 digit pertama dari `String(cityId).padStart(4,'0')`; kembalikan `PROVINCE_TZ[prefix] ?? null`.
 - `normalizeCityName(name)`: `String(name).toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()`.
-- `resolveCity(cities, input)` memakai **tingkat berurutan**; berhenti di tingkat pertama yang berisi hasil:
-  1. `id` sama persis,
-  2. `normalizeCityName(name) === normalizeCityName(input)`,
-  3. nama berakhiran **kata utuh** input: `name === input || name.endsWith(' ' + input)`,
-  4. semua kata input muncul sebagai **kata utuh** di nama (mis. `bandung barat`).
-  Tingkat dengan hasil `> 1` → `{ ambiguous: hasil }`; satu hasil → `{ city }`; tanpa hasil → `null`. Input kosong → `null`. Tingkat 3 & 4 sengaja kata utuh, bukan substring: `arta` tidak boleh cocok ke `KOTA JAKARTA`.
+- `resolveCity(cities, input)`: `id` sama persis lebih dulu; lalu langkah 3 **dan** 4 **digabung jadi satu daftar kandidat** (tidak bertingkat):
+  3. nama berakhiran **kata utuh** input (atau sama persis): `name === input || name.endsWith(' ' + input)`,
+  4. semua kata input muncul sebagai **kata utuh** di nama.
+  Kandidat dari langkah 3 ditaruh lebih dulu (yang paling relevan tampil di atas). Satu kandidat → `{ city }`; lebih dari satu → `{ ambiguous }`; kosong → `null`. Input kosong → `null`.
+  **Kenapa digabung, bukan bertingkat:** dengan bertingkat, `kota` berhenti di langkah 3 dan langsung mengembalikan `KAB. LIMA PULUH KOTA` (satu-satunya nama yang berakhiran "KOTA" di katalog sungguhan) — padahal 96 nama lain juga memuat "KOTA". Aturan produknya: yang ambigu tidak boleh ditebak. Verifikasi di katalog sungguhan: `kota` → 97 kandidat, `kab` → 422, `aceh` → 12, `padang`/`buton` → 4; sedangkan `makassar`, `jakarta`, `1301`, dan `kota bandung` tetap satu hasil.
+  Pencocokan langkah 3 & 4 sengaja **kata utuh**, bukan substring: `arta` tidak boleh cocok ke `KOTA JAKARTA`.
 
 - [ ] **Step 4: Jalankan, pastikan lulus**
 
@@ -709,8 +709,10 @@ Test yang harus ada (setiap test memanggil `startFakeApi()` lalu `close()` di ak
 5. `.sholat daftar ngawur` → balasan ramah (mis. `/tidak (ditemukan|ketemu)/i`), tidak ada langganan.
 6. `.sholat jadwal` → balasan memuat ke-5 waktu (`04:15`, `11:42`, `14:48`, `17:49`, `18:58`).
 7. `.sholat stop` → langganan terhapus.
-8. **Review Focus 1** — server menyajikan 20 kota bernama `KOTA UJI <n>`; `.sholat daftar uji` → balasan menyebut `maxCandidates` kandidat + `/dan \d+ lainnya/`, dan **tidak** memuat 20 baris.
+8. **Review Focus 1** — server menyajikan katalog berbentuk nyata (`KAB. LIMA PULUH KOTA` + 20 kota `KOTA UJI <n>`); `.sholat daftar kota` → **tidak** langsung berlangganan, balasan menyebut `maxCandidates` kandidat + `/dan \d+ lainnya/`, dan memberi saran menulis nama lebih lengkap. (Query `uji` tidak cukup: ia tidak berakhiran cocok, jadi tidak menangkap bug "berhenti di tingkat pertama".)
 9. **Dipakai dari grup** — `.sholat daftar makassar` dikirim dari chat `@g.us` → langganan tetap tercatat untuk JID **pengirim** (`SENDER`), bukan JID grup (spec §12).
+10. **Identitas LID** — pengirim `271446714642565@s.whatsapp.net` yang terpetakan di `lidMap` → langganan tersimpan di nomor telepon asli, dan `.sholat stop` dari nomor itu menemukannya (spec §7, risiko #4).
+11. **API mati** — katalog gagal → balasan ramah; jadwal gagal saat `daftar` → **tidak** ada langganan setengah jalan.
 
 - [ ] **Step 2: Jalankan, pastikan gagal**
 
@@ -720,10 +722,11 @@ Expected: FAIL — `plugins/sholat.js` belum ada.
 - [ ] **Step 3: Implementasi `plugins/sholat.js`**
 
 - Baca komponen pertama `args[0]?.toLowerCase()`; tanpa argumen → bantuan + status.
-- `daftar`: `cities = await fetchCities(config)`; `hasil = resolveCity(cities, text setelah 'daftar')`. `null` → pesan ramah. `ambiguous` → tampilkan maksimal `config.sholat.maxCandidates` baris `• NAMA (id)`, lalu `…dan N lainnya` bila terpotong. `city` → `fetchDayTimes` (untuk memastikan kota valid & jadwal hari ini tersedia) → `subscribe(db, m.sender, city)` → bila `null` (zona waktu tak dikenal) balas pesan ramah; selain itu balas `formatTimes(...)` + catatan bahwa pengingat dikirim ke DM.
+- `daftar`: `jid = db.resolveIdentity(m.sender)`; `cities = await fetchCities(config)`; `hasil = resolveCity(cities, text setelah 'daftar')`. `null` → pesan ramah. `ambiguous` → tampilkan maksimal `config.sholat.maxCandidates` baris `• NAMA (id)`, lalu `…dan N lainnya` (plus saran menulis nama lebih lengkap bila terpotong). `city` → cek `timezoneForCity` → `fetchDayTimes` (jadwal hari ini) → `subscribe(db, jid, city)` → balas `formatTimes(...)` + catatan bahwa pengingat dikirim ke DM.
 - `jadwal`: `getSubscription`; bila kosong → ajakan daftar; selain itu `fetchDayTimes` untuk hari ini lalu `formatTimes`.
-- `stop`: `unsubscribe(db, m.sender)`; balas sesuai hasil.
+- `stop`: `unsubscribe(db, jid)`; balas sesuai hasil.
 - Semua kegagalan jaringan ditangkap dan dijawab dengan pesan ramah (jangan melempar ke handler).
+- Kunci langganan selalu `db.resolveIdentity(m.sender)`, bukan `m.sender` mentah (lihat catatan identitas di bagian atas rencana).
 - `handler.tags = ['islami']`, `handler.limit = false` — patuhi konvensi `tests/plugins-conventions.test.js`.
 
 - [ ] **Step 4: Jalankan, pastikan lulus**
@@ -743,50 +746,38 @@ git commit -m "feat(sholat): plugin perintah .sholat daftar/jadwal/stop"
 ### Task 9: `main.js` — sweep + kirim DM
 
 **Files:**
-- Modify: `main.js` (menyusul blok sweep rent, ~baris 161–177)
-- Modify: `main.js` (import `* as Sholat` dan `fetchDayTimes`)
+- Create: `lib/sholat-runner.js` (orkestrasi sweep — dipisah supaya urutan "kirim dulu, tandai kemudian" bisa diuji tanpa socket)
+- Modify: `main.js` (menyusul blok sweep rent, ~baris 161–177: panggil runner dari `setInterval`)
 
 **Interfaces:**
-- Consumes: `sweep`/`markSent` (Task 6), `fetchDayTimes` (Task 7), `config.sholat` (Task 1).
+- Consumes: `sweep`/`markSent`/`listActiveSubscriptions`/`localParts`/`timezoneForCity` (Task 6), `fetchDayTimes` (Task 7), `config.sholat` (Task 1).
+- Produces: `runSholatSweep(db, config, socket, { now, logger, fetchTimes }) -> Promise<{sends, skipped}>`.
 
-- [ ] **Step 1: Implementasi sweep**
+> **Catatan penyimpangan dari rencana awal:** orkestrasi sweep tidak ditulis inline di `main.js`, tapi di `lib/sholat-runner.js`. Alasannya: `main.js` tidak bisa diimpor test (ia langsung menyambung ke WhatsApp), sehingga jaminan inti spec D4 — "tandai terkirim HANYA setelah DM benar-benar sukses" — tidak akan pernah teruji. Dengan dipisah, `tests/sholat-runner.test.js` bisa membuktikan DM yang gagal tidak ditandai dan dicoba lagi siklus berikutnya. `main.js` tinggal memanggilnya dari `setInterval`.
 
-Tambahkan tepat setelah blok sweep rent, mengikuti gaya yang sama (termasuk `.unref?.()`), dengan dua penambahan: flag anti-tumpang-tindih dan pencatatan kegagalan.
+- [ ] **Step 1: Implementasi runner**
+
+Buat `lib/sholat-runner.js`: ambil jadwal tiap kota yang dilanggan (sekali per kota per siklus; kota yang gagal dilewati tanpa menghentikan yang lain), panggil `sweep`, laporkan `skipped`, lalu kirim DM **dan baru menandai terkirim setelah `sendMessage` selesai tanpa error**. Kegagalan dilaporkan lewat `logger.warn` — tapi sekali saja per kunci (kota+tanggal, jid+alasan, jid+waktu+tanggal) supaya log tidak dibanjiri tiap menit.
+
+Kemudian di `main.js`, tepat setelah blok sweep rent:
 
 ```js
 // ── Sweep jadwal sholat: kirim DM saat waktu sholat tiba ────────────────
+// Orkestrasinya ada di lib/sholat-runner.js (bisa diuji tanpa socket). Jadwal
+// tiap kota di-cache per hari oleh lib/sholat-source.js, jadi satu kota hanya
+// memanggil API sekali sehari walau sweep berjalan tiap menit.
 if (config.sholat?.enabled !== false) {
   let sholatSweepRunning = false;
+
   setInterval(async () => {
-    if (sholatSweepRunning) return;
     const socket = globalThis.conn;
-    if (!socket || !Object.keys(db.data.sholat || {}).length) return;
+    if (!socket || sholatSweepRunning) return;
+
     sholatSweepRunning = true;
     try {
-      const now = Date.now();
-      const timesByCity = {};
-      for (const sub of Sholat.listActiveSubscriptions(db)) {
-        if (timesByCity[sub.cityId]) continue;
-        try {
-          const dateStr = Sholat.localParts(new Date(now), sub.timezone).date;
-          const day = await fetchDayTimes(config, sub.cityId, dateStr);
-          timesByCity[sub.cityId] = day.times;
-        } catch (err) {
-          logger.warn?.(`[sholat] jadwal ${sub.cityId} gagal: ${err.message}`);
-        }
-      }
-      const plan = Sholat.sweep(db, config, { now, timesByCity });
-      for (const item of plan.skipped) logger.info?.(`[sholat] dilewati ${item.jid}: ${item.reason}`);
-      for (const send of plan.sends) {
-        try {
-          await socket.sendMessage(send.jid, { text: send.text });
-          Sholat.markSent(db, send);      // hanya setelah kirim sukses (spec D4)
-        } catch {
-          /* DM bisa gagal — dicoba lagi siklus berikutnya */
-        }
-      }
+      await runSholatSweep(db, config, socket, { logger });
     } catch (err) {
-      logger.error?.(`[sholat] sweep: ${err.message}`);
+      logger.error(`[sholat] sweep: ${err.message}`);
     } finally {
       sholatSweepRunning = false;
     }
@@ -797,14 +788,13 @@ if (config.sholat?.enabled !== false) {
 Tambahkan import di bagian atas `main.js` bersama import lain:
 
 ```js
-import * as Sholat from './lib/sholat.js';
-import { fetchDayTimes } from './lib/sholat-source.js';
+import { runSholatSweep } from './lib/sholat-runner.js';
 ```
 
 - [ ] **Step 2: Verifikasi sintaks**
 
 Run: `npm run check`
-Expected: semua file lolos (jumlah file naik karena 4 file baru).
+Expected: semua file lolos (jumlah file naik karena 5 file baru).
 
 - [ ] **Step 3: Verifikasi smoke (mode tanpa koneksi)**
 
@@ -814,11 +804,11 @@ Expected: keluar dengan kode 0, tanpa error; tidak ada panggilan jaringan karena
 - [ ] **Step 4: Verifikasi seluruh test**
 
 Run: `npm test`
-Expected: seluruh test lulus (`fail 0`), termasuk `tests/sholat.test.js`, `tests/sholat-source.test.js`, `tests/sholat-plugins.test.js`, `tests/database.test.js`, dan `tests/plugins-conventions.test.js`.
+Expected: seluruh test lulus (`fail 0`), termasuk `tests/sholat.test.js`, `tests/sholat-source.test.js`, `tests/sholat-plugins.test.js`, `tests/sholat-runner.test.js`, `tests/database.test.js`, dan `tests/plugins-conventions.test.js`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add main.js
-git commit -m "feat(sholat): sweep berkala di main.js + kirim DM"
+git add main.js lib/sholat-runner.js tests/sholat-runner.test.js
+git commit -m "feat(sholat): sweep berkala + kirim DM"
 ```
