@@ -256,6 +256,25 @@ export const config = {
     sweepIntervalMs: 6 * 60 * 60 * 1000,
   },
 
+  /**
+   * Jadwal sholat via DM.
+   * Sumber: MyQuran API v2 (gratis, tanpa API key). Tiap user memilih satu
+   * daerah; bot mengirim DM pada 5 waktu wajib.
+   */
+  sholat: {
+    enabled: env('SHOLAT_ENABLED', 'true') !== 'false',
+    apiBase: env('SHOLAT_API_BASE', 'https://api.myquran.com/v2'),
+    timeoutMs: envNumber('SHOLAT_TIMEOUT', 15000),
+    /** seberapa sering sweep; 60 detik = presisi ±1 menit */
+    sweepIntervalMs: envNumber('SHOLAT_SWEEP_MS', 60000),
+    /** jendela kirim setelah waktu sholat lewat (menit) */
+    graceMinutes: envNumber('SHOLAT_GRACE_MINUTES', 30),
+    /** batas kandidat yang ditampilkan saat nama daerah ambigu */
+    maxCandidates: envNumber('SHOLAT_MAX_CANDIDATES', 10),
+    /** waktu yang dikirim, berurutan sesuai tampilan */
+    prayers: envList('SHOLAT_PRAYERS', ['subuh', 'dzuhur', 'ashar', 'maghrib', 'isya']),
+  },
+
   /** Hadiah tiap pesan chat (XP & saldo acak) */
   rewards: {
     chat: {
