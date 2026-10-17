@@ -81,6 +81,34 @@ test('database: section rentals & renters terpisah dari users, survive roundtrip
   second.close();
 });
 
+test('database: section sholat selalu objek & survive roundtrip', async () => {
+  const dir = tmpDir();
+  const file = path.join(dir, 'database.json');
+
+  const first = new Database(file, { saveInterval: 5, logger: { warn() {}, error() {} } });
+  first.load();
+
+  // selalu objek setelah load, walau file kosong
+  assert.equal(typeof first.data.sholat, 'object');
+  assert.notEqual(first.data.sholat, first.data.users);
+
+  first.data.sholat['628111@s.whatsapp.net'] = { jid: '628111@s.whatsapp.net', cityId: '1301' };
+  await first.save(true);
+  first.close();
+
+  const second = new Database(file, { saveInterval: 5, logger: { warn() {}, error() {} } });
+  second.load();
+  assert.equal(second.data.sholat['628111@s.whatsapp.net'].cityId, '1301');
+  second.close();
+
+  // nilai rusak (bukan objek) diperbaiki, bukan dipertahankan
+  fs.writeFileSync(file, JSON.stringify({ sholat: 'rusak' }), 'utf8');
+  const third = new Database(file, { saveInterval: 5, logger: { warn() {}, error() {} } });
+  third.load();
+  assert.deepEqual(third.data.sholat, {});
+  third.close();
+});
+
 test('database: file rusak tidak menghapus data (dibackup .corrupt)', () => {
   const dir = tmpDir();
   const file = path.join(dir, 'database.json');
