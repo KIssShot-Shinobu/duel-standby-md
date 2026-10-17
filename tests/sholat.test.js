@@ -11,6 +11,10 @@ import {
   listActiveSubscriptions,
   localParts,
   duePrayers,
+  sweep,
+  markSent,
+  buildMessage,
+  formatTimes,
   PRAYERS,
 } from '../lib/sholat.js';
 
@@ -136,4 +140,83 @@ test('duePrayers: waktu rusak/kosong dilewati tanpa merusak waktu lain', () => {
   assert.deepEqual(duePrayers(sub, rusak, { now: wib(17, 49), graceMinutes: 30 }), []);
   const jamPenuh = { ...rusak, isya: '17:49' };
   assert.deepEqual(duePrayers(sub, jamPenuh, { now: wib(17, 49), graceMinutes: 30 }), ['isya']);
+});
+
+const CONFIG = { sholat: { graceMinutes: 30, prayers: PRAYERS } };
+const JKT = '628111@s.whatsapp.net';
+const MKS = '628222@s.whatsapp.net';
+
+test('sweep: dua pelanggan beda zona memakai zona waktunya masing-masing', () => {
+  // Pada instan yang sama, WIB 17:49 == WITA 18:49.
+  const db = fakeDb();
+  subscribe(db, JKT, CITIES[0], { now: 0 }); // Jakarta
+  subscribe(db, MKS, CITIES[1], { now: 0 }); // Makassar
+
+  const plan = sweep(db, CONFIG, {
+    now: Date.parse('2026-10-17T10:49:00Z'),
+    timesByCity: {
+      1301: { subuh: '04:15', dzuhur: '11:42', ashar: '14:48', maghrib: '17:49', isya: '18:58' },
+      2622: { subuh: '04:52', dzuhur: '12:19', ashar: '15:25', maghrib: '18:49', isya: '19:58' },
+    },
+  });
+
+  assert.equal(plan.sends.length, 2);
+  const byJid = Object.fromEntries(plan.sends.map((send) => [send.jid, send]));
+  assert.equal(byJid[JKT].prayer, 'maghrib');
+  assert.equal(byJid[JKT].time, '17:49');
+  assert.equal(byJid[JKT].timezone, 'Asia/Jakarta');
+  assert.equal(byJid[MKS].time, '18:49');
+  assert.equal(byJid[MKS].timezone, 'Asia/Makassar');
+  assert.equal(byJid[JKT].date, '2026-10-17');
+  assert.match(byJid[JKT].text, /MAGHRIB/);
+  assert.deepEqual(plan.skipped, []);
+});
+
+test('sweep: pelanggan tanpa jadwal / zona waktu tak dikenal dilewati & dicatat', () => {
+  const db = fakeDb();
+  subscribe(db, JKT, CITIES[0], { now: 0 });
+  db.data.sholat['628333@s.whatsapp.net'] = {
+    jid: '628333@s.whatsapp.net',
+    cityId: '9999',
+    cityName: 'NGACO',
+    timezone: '',
+    enabled: true,
+    sent: { date: '', keys: [] },
+  };
+
+  const plan = sweep(db, CONFIG, { now: Date.parse('2026-10-17T10:49:00Z'), timesByCity: {} });
+  assert.deepEqual(plan.sends, []);
+  assert.deepEqual(plan.skipped.map((item) => item.reason).sort(), ['no-times', 'unknown-timezone']);
+});
+
+test('markSent idempoten dan reset saat tanggal berganti', () => {
+  const db = fakeDb();
+  subscribe(db, JKT, CITIES[0], { now: 0 });
+  const send = { jid: JKT, prayer: 'maghrib', date: '2026-10-17' };
+  markSent(db, send);
+  markSent(db, send);
+  assert.deepEqual(getSubscription(db, JKT).sent, { date: '2026-10-17', keys: ['maghrib'] });
+  markSent(db, { jid: JKT, prayer: 'subuh', date: '2026-10-18' });
+  assert.deepEqual(getSubscription(db, JKT).sent, { date: '2026-10-18', keys: ['subuh'] });
+});
+
+test('buildMessage & formatTimes: teks persis seperti spec', () => {
+  const sub = { cityName: 'KOTA JAKARTA', timezone: 'Asia/Jakarta' };
+  assert.equal(
+    buildMessage(sub, 'maghrib', '17:49'),
+    '🕌 *WAKTU SHOLAT — MAGHRIB*\n🕐 17:49 WIB\n📍 KOTA JAKARTA',
+  );
+  assert.equal(
+    formatTimes(sub, TIMES),
+    [
+      '🕌 *JADWAL SHOLAT — KOTA JAKARTA*',
+      '📍 Zona waktu: WIB',
+      '',
+      '• Subuh: 04:15',
+      '• Dzuhur: 11:42',
+      '• Ashar: 14:48',
+      '• Maghrib: 17:49',
+      '• Isya: 18:58',
+    ].join('\n'),
+  );
 });
