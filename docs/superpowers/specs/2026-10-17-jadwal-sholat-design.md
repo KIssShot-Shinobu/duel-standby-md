@@ -278,7 +278,9 @@ sholat: {
 
 ## 14. Strategi test
 
-`tests/sholat.test.js`, gaya `tests/rent.test.js` (db palsu + jam disuntik, tanpa jaringan):
+Test dibagi tiga berkas sesuai tanggung jawab.
+
+**`tests/sholat.test.js`** — logika murni, gaya `tests/rent.test.js` (db palsu + jam disuntik, tanpa jaringan):
 
 1. `resolveCity` — cocok persis, cocok sebagian, **ambigu (`KOTA SOFIFI`)**, tak ditemukan, dan pencocokan via id.
 2. `timezoneForCity` — Jakarta/WIB, Denpasar/WITA, Jayapura/WIT, Pontianak/WIB (batas), kode tak dikenal → `null`.
@@ -287,13 +289,15 @@ sholat: {
 5. Restart/duplikasi — pelanggan dengan `sent` terisi tidak dikirim ulang.
 6. D1/D2/D3/D4 sebagai kasus eksplisit.
 7. `formatTimes` — isi pesan sesuai contoh.
-8. `lib/sholat-source.js` — parsing payload API dengan `fetch` yang di-stub; cache hit tidak memanggil ulang; error/timeout tidak melempar keluar.
+**`tests/sholat-source.test.js`** — parsing payload API dengan `fetch` yang di-stub; cache hit tidak memanggil ulang; error/timeout tidak melempar keluar.
+
+**`tests/sholat-plugins.test.js`** — perintah `.sholat` end-to-end lewat `handleMessage`, dengan server HTTP lokal sebagai tiruan MyQuran (gaya `tests/rent-plugins.test.js`).
 
 Verifikasi menyeluruh sebelum selesai: `npm test` dan `npm run check`.
 
 ## 15. File tersentuh
 
-**Baru:** `lib/sholat.js` · `lib/sholat-source.js` · `plugins/sholat.js` · `tests/sholat.test.js` · dokumen ini
+**Baru:** `lib/sholat.js` · `lib/sholat-source.js` · `plugins/sholat.js` · `tests/sholat.test.js` · `tests/sholat-source.test.js` · `tests/sholat-plugins.test.js` · dokumen ini
 **Diubah:** `main.js` (+sweep) · `config.js` (+blok `sholat`) · `lib/database.js` (+koleksi `sholat` + loop normalisasi) · `.env.example` (+variabel `SHOLAT_*`)
 
 ## 16. Risiko & catatan terbuka
