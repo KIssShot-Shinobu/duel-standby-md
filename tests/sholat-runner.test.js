@@ -184,6 +184,45 @@ test('sweep: jadwal satu kota gagal diambil tidak menghentikan pelanggan lain', 
   assert.deepEqual(getSubscription(db, JKT).sent, { date: '', keys: [] });
 });
 
+test('sweep: DM dikirim ke alamat chat (LID), bukan ke nomor identitas', async () => {
+  const db = fakeDb();
+  const LID = '271446714642565@lid';
+  db.data.lidMap = { [LID]: JKT };
+  subscribe(db, JKT, JAKARTA, { now: 0, sendTo: LID });
+  const socket = fakeSocket();
+
+  await runSholatSweep(db, CONFIG, socket, { now: SEKARANG, fetchTimes: timesFor() });
+
+  assert.equal(socket.percobaan[0], LID, 'pengingat harus dikirim ke chat LID yang WhatsApp pakai');
+  assert.deepEqual(
+    getSubscription(db, JKT).sent,
+    { date: TANGGAL, keys: ['maghrib'] },
+    'penandaan tetap memakai identitas (jid), bukan alamat kirim',
+  );
+});
+
+test('sweep: record lama tanpa alamat kirim memakai LID dari lidMap', async () => {
+  const db = fakeDb();
+  const LID = '999@lid';
+  db.data.lidMap = { [LID]: JKT };
+  subscribe(db, JKT, JAKARTA, { now: 0 }); // record lama: belum ada sendTo
+  const socket = fakeSocket();
+
+  await runSholatSweep(db, CONFIG, socket, { now: SEKARANG, fetchTimes: timesFor() });
+
+  assert.equal(socket.percobaan[0], LID, 'LID dicari dari lidMap supaya record lama ikut terkirim');
+});
+
+test('sweep: tanpa LID yang diketahui tetap memakai nomor (perilaku lama tidak rusak)', async () => {
+  const db = fakeDb();
+  subscribe(db, JKT, JAKARTA, { now: 0 });
+  const socket = fakeSocket();
+
+  await runSholatSweep(db, CONFIG, socket, { now: SEKARANG, fetchTimes: timesFor() });
+
+  assert.equal(socket.percobaan[0], JKT);
+});
+
 test('sweep: tanpa pelanggan tidak menyentuh jaringan sama sekali', async () => {
   const db = fakeDb();
   let panggilan = 0;

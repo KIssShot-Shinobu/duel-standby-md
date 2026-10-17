@@ -11,6 +11,7 @@ import { Database } from '../lib/database.js';
 import { PluginManager } from '../lib/plugins.js';
 import * as Rent from '../lib/rent.js';
 import { clearCache } from '../lib/sholat-source.js';
+import sholatPlugin from '../plugins/sholat.js';
 
 const pluginsDir = path.resolve(import.meta.dirname, '..', 'plugins');
 const quiet = { warn() {}, error() {}, info() {}, debug() {} };
@@ -241,6 +242,131 @@ test('.sholat jadwal tanpa langganan: mengajak daftar', async (t) => {
     await handleMessage(ctx.conn, dmMsg('.sholat jadwal'), opts);
     assert.match(reply(ctx.sent, SENDER), /belum berlangganan/i);
   });
+});
+
+// ── Alamat kirim: DM ber-LID ───────────────────────────────────────────────
+//
+// WhatsApp sekarang mengalamatkan DM dengan LID (`remoteJid` = `…@lid`,
+// `remoteJidAlt` = nomor telepon). Balasan bot jalan karena dikirim ke `m.chat`
+// (LID), sedangkan langganan sholat menyimpan nomor — dan kiriman "dingin" ke
+// nomor tidak terantar. Test di bawah mengunci alamat kirimnya.
+
+const LID = '271446714642565@lid';
+
+/** DM seperti WhatsApp mengirimnya: `remoteJid` = LID, `remoteJidAlt` = nomor. */
+const lidDm = (text) => ({
+  key: {
+    remoteJid: LID,
+    remoteJidAlt: SENDER,
+    fromMe: false,
+    id: `IN-${Math.random().toString(36).slice(2, 8)}`,
+  },
+  message: { conversation: text },
+  messageTimestamp: Math.floor(Date.now() / 1000),
+  pushName: 'Tester',
+});
+
+test('.sholat daftar dari DM ber-LID menyimpan alamat kirim = chat LID', async (t) => {
+  await withHarness(t, {}, async (ctx, opts) => {
+    await handleMessage(ctx.conn, lidDm('.sholat daftar makassar'), opts);
+
+    const record = ctx.db.data.sholat[SENDER];
+    assert.ok(record, 'langganan tersimpan pada identitas nomor telepon');
+    assert.equal(record.jid, SENDER);
+    assert.equal(record.sendTo, LID, 'pengingat dikirim ke chat LID yang WhatsApp pakai');
+  });
+});
+
+test('.sholat menyegarkan alamat kirim record lama yang masih menyimpan nomor', async (t) => {
+  await withHarness(t, {}, async (ctx, opts) => {
+    await handleMessage(ctx.conn, lidDm('.sholat daftar makassar'), opts);
+    ctx.db.data.sholat[SENDER].sendTo = null; // seolah record dibuat sebelum perbaikan
+
+    await handleMessage(ctx.conn, lidDm('.sholat'), opts);
+
+    assert.equal(ctx.db.data.sholat[SENDER].sendTo, LID, 'alamat kirim diperbarui saat user mengetik .sholat');
+  });
+});
+
+test('.sholat daftar dari grup tidak memakai grup sebagai alamat kirim', async (t) => {
+  await withHarness(t, {}, async (ctx, opts) => {
+    await handleMessage(ctx.conn, msg('.sholat daftar makassar', GROUP), opts);
+
+    const record = ctx.db.data.sholat[SENDER];
+    assert.ok(record, 'pendaftaran dari grup tetap tercatat pada identitas pengirim');
+    assert.equal(record.sendTo, null, 'pengingat tidak boleh dikirim ke grup');
+  });
+});
+
+test('.sholat test (owner): mengirim pesan uji ke alamat LID dan melaporkan hasilnya', async (t) => {
+  await withHarness(t, {}, async (ctx, opts) => {
+    const ownerOpts = { ...opts, config: { ...ctx.config, bot: { ...ctx.config.bot, owners: ['628111'] } } };
+
+    await handleMessage(ctx.conn, lidDm('.sholat daftar makassar'), ownerOpts);
+    await handleMessage(ctx.conn, lidDm('.sholat test'), ownerOpts);
+
+    const uji = ctx.sent.filter((item) => item.chat === LID && /Uji/i.test(item.content?.text || ''));
+    assert.equal(uji.length, 1, 'pesan uji harus dikirim ke LID');
+    assert.match(lastReply(ctx.sent, LID), /Terkirim/i);
+  });
+});
+
+test('.sholat test (owner): kegagalan kirim dilaporkan beserta alasannya', async () => {
+  const db = {
+    data: {
+      sholat: {
+        [SENDER]: {
+          jid: SENDER,
+          sendTo: LID,
+          cityId: '1301',
+          cityName: 'KOTA JAKARTA',
+          timezone: 'Asia/Jakarta',
+          enabled: true,
+          sent: { date: '', keys: [] },
+        },
+      },
+      lidMap: {},
+    },
+    resolveIdentity: (jid) => jid,
+    touch() {},
+  };
+  const replies = [];
+  const m = {
+    chat: LID,
+    sender: SENDER,
+    reply: async (text) => {
+      replies.push(String(text));
+      return { key: { id: 'R' } };
+    },
+  };
+
+  await sholatPlugin(m, {
+    args: ['test'],
+    db,
+    config: baseConfig,
+    isOwner: true,
+    conn: { sendMessage: async () => { throw new Error('no session'); } },
+    usedPrefix: '.',
+  });
+
+  assert.match(replies.at(-1), /gagal/i);
+  assert.match(replies.at(-1), /no session/, 'alasan asli harus dilaporkan supaya bisa didiagnosis');
+});
+
+test('.sholat test ditolak untuk non-owner', async () => {
+  const replies = [];
+  const m = { chat: LID, sender: SENDER, reply: async (text) => { replies.push(String(text)); return { key: { id: 'R' } }; } };
+
+  await sholatPlugin(m, {
+    args: ['test'],
+    db: { data: { sholat: {}, lidMap: {} }, resolveIdentity: (jid) => jid, touch() {} },
+    config: baseConfig,
+    isOwner: false,
+    conn: { sendMessage: async () => ({}) },
+    usedPrefix: '.',
+  });
+
+  assert.match(replies.at(-1), /owner/i);
 });
 
 test('.sholat stop: menghapus langganan', async (t) => {
