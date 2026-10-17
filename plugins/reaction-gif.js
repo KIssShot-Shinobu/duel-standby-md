@@ -32,6 +32,7 @@ import { fetchImage, downloadImage } from '../lib/image-source.js';
 import { sendImageResult } from '../lib/media-send.js';
 import { userError } from '../lib/errors.js';
 import { userName } from '../lib/messages.js';
+import { findParticipantPhone } from '../lib/permissions.js';
 
 // Mapping command -> kategori nekos.best
 const REACTION_MAP = {
@@ -136,7 +137,7 @@ function helpText(usedPrefix) {
   return lines.join('\n');
 }
 
-const handler = async (m, { conn, text, args, command, usedPrefix, config }) => {
+const handler = async (m, { conn, text, args, command, usedPrefix, config, groupMetadata }) => {
   if (/^reactionlist$/i.test(command)) return m.reply(helpText(usedPrefix));
 
   // command langsung = action (.kick, .hug, .kiss, dll)
@@ -152,7 +153,22 @@ const handler = async (m, { conn, text, args, command, usedPrefix, config }) => 
 
   if (targets.length > 0) {
     targetJid = targets[0];
-    targetName = targetJid.split('@')[0];
+    // Target bisa berupa LID atau phone number JID. conn.getName() hanya
+    // bekerja dengan phone number JID — kalau diberi LID, ia return LID-nya
+    // sendiri sehingga validasi nama selalu gagal. Oleh karena itu cari
+    // phone number peserta dari groupMetadata dulu untuk lookup nama.
+    let phoneJid = targetJid;
+    if (String(targetJid).endsWith('@lid')) {
+      const pn = findParticipantPhone(groupMetadata, targetJid);
+      if (pn) phoneJid = pn;
+    }
+    try {
+      const name = await conn.getName(phoneJid);
+      const num = phoneJid.split('@')[0];
+      targetName = (name && name !== num) ? name : num;
+    } catch {
+      targetName = phoneJid.split('@')[0];
+    }
   } else {
     // Self-reaction: bot jadi target
     targetJid = conn.user?.id || '628999@s.whatsapp.net';
