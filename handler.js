@@ -324,6 +324,12 @@ export async function handleMessage(conn, raw, deps) {
     await m.reply(config.messages.owner).catch(() => {});
     return { handled: false, reason: 'need-owner' };
   }
+  // Perintah bertanda `mods` boleh owner maupun moderator (mis. `.ban`). Owner
+  // selalu boleh; moderator tidak boleh memakai perintah bertanda `owner`.
+  if (plugin.mods && !isMods && !isOwner) {
+    await m.reply(config.messages.mods || config.messages.owner).catch(() => {});
+    return { handled: false, reason: 'need-mods' };
+  }
   if (plugin.premium && !isPremium && !isMods) {
     await m.reply(config.messages.premium).catch(() => {});
     return { handled: false, reason: 'need-premium' };

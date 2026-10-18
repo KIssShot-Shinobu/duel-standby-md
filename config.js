@@ -310,6 +310,7 @@ export const config = {
     limit: env('MSG_LIMIT', 'Limit kamu udah habis. Reset besok ya, atau upgrade ke premium.'),
     premium: env('MSG_PREMIUM', 'Fitur ini khusus pengguna premium.'),
     owner: env('MSG_OWNER', 'Fitur ini khusus owner bot.'),
+    mods: env('MSG_MODS', 'Fitur ini khusus moderator bot.'),
     disabled: env('MSG_DISABLED', 'Fitur ini lagi dimatikan sama owner.'),
     admin: env('MSG_ADMIN', 'Fitur ini khusus admin grup.'),
     botAdmin: env('MSG_BOT_ADMIN', 'Jadiin bot admin grup dulu ya.'),

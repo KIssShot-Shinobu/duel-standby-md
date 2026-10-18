@@ -235,14 +235,14 @@ test('target tidak valid tidak membuat user palsu (hanya petunjuk)', async () =>
   db.close();
 });
 
-test('.ban & .unban tetap bekerja dan tersimpan', async () => {
-  const { db, file } = makeDb();
-  await run(db, { command: 'ban', args: [TARGET, 'spam'] });
-  assert.equal(db.user(TARGET_JID).banned, true);
-  assert.equal(db.user(TARGET_JID).bannedReason, 'spam');
+// Blokir user pindah ke `plugins/owner-ban.js` karena boleh dipakai moderator
+// juga (test-nya di tests/mod-ban.test.js). Di sini dikunci bahwa plugin
+// owner-only ini TIDAK lagi menangani `.ban`, supaya gate owner tidak bocor.
+test('.ban bukan lagi milik plugin owner-only (pindah ke owner-ban.js)', async () => {
+  const { db } = makeDb();
+  const reply = await run(db, { command: 'ban', args: [TARGET, 'spam'] });
 
-  await run(db, { command: 'unban', args: [TARGET] });
-  assert.equal(db.user(TARGET_JID).banned, false);
-  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).users[TARGET_JID].banned, false);
+  assert.equal(db.user(TARGET_JID).banned, false, 'owner-user.js tidak boleh mem-ban lagi');
+  assert.match(reply, /Manajemen user/i, 'jatuh ke bantuan, bukan mem-ban');
   db.close();
 });

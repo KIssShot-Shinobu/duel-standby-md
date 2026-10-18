@@ -5,7 +5,10 @@
  *   .premium add 30                (sambil reply pesan user -> 30 hari)
  *   .limit add 628xx 10            .limit del 628xx 5
  *   .limit add 10                  (sambil reply -> +10)
- *   .resetlimit 628xx              .ban 628xx [alasan]     .unban 628xx
+ *   .resetlimit 628xx
+ *
+ * Blokir user (`.ban` / `.unban`) dipindah ke `plugins/owner-ban.js` karena boleh
+ * dipakai moderator juga; file ini tetap khusus owner.
  *
  * Target boleh: nomor (628xx / 08xx), mention (@628xx), atau cukup reply pesan user.
  * Target ber-LID (`...@lid`) otomatis dipetakan ke record nomor telepon lewat
@@ -24,8 +27,6 @@ const HELP = (config) => {
   return [
     '*Manajemen user*',
     `${p}premium add|del|list <nomor> [hari]`,
-    `${p}ban <nomor> [alasan]`,
-    `${p}unban <nomor>`,
     `${p}limit add|del <nomor> <jumlah>`,
     `${p}resetlimit <nomor>`,
     '',
@@ -66,7 +67,7 @@ const handler = async (m, { args, command, config, db }) => {
   }
 
   // `.premium add <target> ...` / `.limit add <target> ...` punya kata kunci aksi dulu,
-  // sedangkan `.ban <target>`, `.unban <target>`, `.resetlimit <target>` tidak.
+  // sedangkan `.resetlimit <target>` tidak.
   const withAction = /^(premium|limit)$/i.test(command);
   const { jid: rawTarget, rest } = resolveTarget(m, withAction ? args.slice(1) : args, { shorthand: withAction });
   // Target bisa berupa LID (WhatsApp baru). Arahkan ke record nomor teleponnya
@@ -144,23 +145,6 @@ const handler = async (m, { args, command, config, db }) => {
     return m.reply(`✅ Premium ${bareNumber(target)} dicabut. Kuota limit: *${user.limit}*`);
   }
 
-  // ── .ban / .unban ────────────────────────────────────────────────────────
-  if (/^(ban)$/i.test(command)) {
-    user.banned = true;
-    user.bannedReason = rest.join(' ') || 'tanpa alasan';
-    db.touch();
-    await db.save?.(true);
-    return m.reply(`🚫 ${bareNumber(target)} diblokir. Alasan: ${user.bannedReason}`);
-  }
-
-  if (/^(unban)$/i.test(command)) {
-    user.banned = false;
-    user.bannedReason = '';
-    db.touch();
-    await db.save?.(true);
-    return m.reply(`✅ Blokir ${bareNumber(target)} dibuka.`);
-  }
-
   // ── .resetlimit ──────────────────────────────────────────────────────────
   if (/^(resetlimit)$/i.test(command)) {
     user.lastLimitReset = 0;
@@ -175,9 +159,9 @@ const handler = async (m, { args, command, config, db }) => {
   return m.reply(HELP(config));
 };
 
-handler.help = ['premium', 'ban', 'unban', 'limit', 'resetlimit'];
+handler.help = ['premium', 'limit', 'resetlimit'];
 handler.tags = ['owner'];
-handler.command = /^(premium|ban|unban|limit|resetlimit)$/i;
+handler.command = /^(premium|limit|resetlimit)$/i;
 handler.owner = true;
 handler.limit = false;
 
