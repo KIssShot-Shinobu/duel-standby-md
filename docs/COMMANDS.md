@@ -1,6 +1,6 @@
 # Daftar Command
 
-> Dibuat otomatis oleh `npm run commands -- --markdown` — 64 plugin, 184 command.
+> Dibuat otomatis oleh `npm run commands -- --markdown` — 65 plugin, 185 command.
 > Prefix default: `.` (lihat `PREFIX` di `.env`).
 
 ## ai
@@ -55,6 +55,7 @@
 | Command | Keterangan syarat | File |
 |---|---|---|
 | `.add` | admin grup, bot harus admin, hanya grup | `group-add.js` |
+| `.bot` | admin grup, hanya grup | `group-bot.js` |
 | `.antilink`, `.antispam`, `.welcome`, `.detect` | admin grup, hanya grup | `group-config.js` |
 | `.gkick`, `.groupkick`, `.keluarkan` | admin grup, bot harus admin, hanya grup | `group-kick.js` |
 | `.link` | admin grup, bot harus admin, hanya grup | `group-link.js` |
