@@ -249,7 +249,7 @@ export const config = {
     /** plugin yang selalu free (prefix nama file plugin) */
     freePlugins: ['game-yugioh', 'tools-sticker', 'sticker-', 'tools-toimg', 'sholat'],
     /** plugin yang tidak pernah dikunci */
-    alwaysAllowed: ['main-', 'owner-', 'rent.js', '_rent-guard'],
+    alwaysAllowed: ['main-', 'owner-', 'rent.js', '_rent-guard', 'group-bot'],
     /** pesan saat command terkunci karena grup tidak punya sewa aktif */
     gatedMessage: env('RENT_GATED_MSG', '🔒 Fitur ini butuh sewa aktif. Ketik `.rent` untuk menyewa.'),
     /** seberapa sering sweep cek expired/reminder */
