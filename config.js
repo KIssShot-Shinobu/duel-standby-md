@@ -269,6 +269,10 @@ export const config = {
     sweepIntervalMs: envNumber('SHOLAT_SWEEP_MS', 60000),
     /** jendela kirim setelah waktu sholat lewat (menit) */
     graceMinutes: envNumber('SHOLAT_GRACE_MINUTES', 30),
+    /** jeda minimum sebelum DM yang gagal dicoba lagi (ms) */
+    retryAfterMs: envNumber('SHOLAT_RETRY_MS', 5 * 60 * 1000),
+    /** batas percobaan kirim per waktu sholat sebelum menyerah */
+    maxAttempts: envNumber('SHOLAT_MAX_ATTEMPTS', 3),
     /** batas kandidat yang ditampilkan saat nama daerah ambigu */
     maxCandidates: envNumber('SHOLAT_MAX_CANDIDATES', 10),
     /** waktu yang dikirim, berurutan sesuai tampilan */

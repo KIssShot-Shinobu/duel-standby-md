@@ -13,6 +13,7 @@ import {
   getSubscription,
   localParts,
   resolveCity,
+  sendTargetFor,
   subscribe,
   timezoneForCity,
   unsubscribe,
@@ -84,7 +85,9 @@ async function daftar(m, { args, db, config }, jid) {
     return m.reply(GAGAL_AMBIL);
   }
 
-  const record = subscribe(db, jid, city);
+  // Alamat kirim = chat yang WhatsApp pakai untuk DM ini (`m.chat`, biasanya
+  // `…@lid`). Dari grup jangan dipakai: pengingatnya nanti masuk ke grup.
+  const record = subscribe(db, jid, city, { sendTo: m.isGroup ? null : m.chat });
 
   return m.reply(
     [
@@ -123,6 +126,43 @@ function berhenti(m, db, jid) {
   );
 }
 
+/**
+ * Segarkan alamat kirim dari chat yang WhatsApp pakai sekarang.
+ *
+ * Record yang dibuat sebelum perbaikan menyimpan nomor telepon, dan kiriman ke
+ * nomor tidak terantar di era LID. User yang mengetik `.sholat` apa pun
+ * memperbaikinya sendiri, tanpa perlu `.sholat stop` lalu daftar ulang.
+ */
+function segarkanAlamatKirim(db, jid, m) {
+  const record = getSubscription(db, jid);
+  if (!record || m?.isGroup) return;
+  const chat = String(m?.chat || '');
+  if (!chat.endsWith('@lid') || record.sendTo === chat) return;
+  record.sendTo = chat;
+  db.touch?.();
+}
+
+/**
+ * Owner: buktikan jalur DM pengingat sekarang juga, tanpa menunggu waktu sholat.
+ * Mengirim persis seperti sweep (tanpa kutipan) lalu melaporkan hasilnya —
+ * termasuk alasan aslinya kalau gagal, supaya bisa didiagnosis.
+ */
+async function ujiKirim(m, { conn, db, isOwner }, jid) {
+  if (!isOwner) return m.reply('Perintah ini khusus owner.');
+  const record = getSubscription(db, jid);
+  if (!record) return m.reply('Kamu belum berlangganan, jadi tidak ada alamat kirim untuk diuji.');
+
+  const to = sendTargetFor(db, record);
+  try {
+    await conn.sendMessage(to, {
+      text: '🧪 *Uji kirim pengingat sholat*\n\nKalau pesan ini kamu terima, jalur DM pengingat sudah benar.',
+    });
+    return m.reply(`✅ Terkirim ke \`${to}\`.`);
+  } catch (err) {
+    return m.reply(`❌ Gagal kirim ke \`${to}\`:\n${err?.message || err}`);
+  }
+}
+
 const handler = async (m, ctx) => {
   const sub = String(ctx.args[0] || '').toLowerCase();
   // Kunci langganan memakai identitas yang sudah diselesaikan (LID -> nomor
@@ -130,11 +170,13 @@ const handler = async (m, ctx) => {
   // "LID yang dipaksakan jadi nomor" akan terdaftar di record hantu: sweep
   // tetap mengirim DM, tapi `.sholat stop` tidak menemukan langganannya.
   const jid = ctx.db.resolveIdentity(m.sender);
+  segarkanAlamatKirim(ctx.db, jid, m);
 
   if (!sub) return status(m, ctx.db, jid);
   if (sub === 'stop' || sub === 'berhenti' || sub === 'off') return berhenti(m, ctx.db, jid);
   if (sub === 'jadwal') return jadwal(m, ctx, jid);
   if (sub === 'daftar' || sub === 'subscribe') return daftar(m, ctx, jid);
+  if (sub === 'test') return ujiKirim(m, ctx, jid);
 
   return m.reply(`Perintah \`${sub}\` tidak dikenal.\n\n${HELP}`);
 };

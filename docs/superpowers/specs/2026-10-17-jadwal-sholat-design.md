@@ -106,6 +106,7 @@ Koleksi baru `db.data.sholat` — objek berkunci JID user:
 db.data.sholat = {
   '628123456789@s.whatsapp.net': {
     jid: '628123456789@s.whatsapp.net',
+    sendTo: '271446714642565@lid',
     cityId: '2622',
     cityName: 'KOTA MAKASSAR',
     timezone: 'Asia/Makassar',
@@ -122,6 +123,12 @@ Catatan bentuk:
 - Kunci = hasil `db.resolveIdentity(sender)` supaya konsisten dengan penyelesaian LID→nomor telepon yang sudah ada (lihat `lib/database.js`).
 - `sent` hanya menyimpan **tanggal berjalan** (`date` + `keys`), direset saat tanggal berganti → penyimpanan tidak membengkak.
 - Satu user = satu langganan (ganti daerah = menimpa, bukan menambah).
+- **Revisi (18 Okt 2026): `sendTo` wajib, terpisah dari `jid`.** WhatsApp sekarang
+  mengalamatkan DM dengan LID (`remoteJid` = `…@lid`, `remoteJidAlt` = nomor),
+  jadi balasan bot jalan (dikirim ke `m.chat`) sedangkan pengingat yang dikirim ke
+  `jid` (nomor) **tidak terantar** — terlihat sebagai percobaan gagal berulang di
+  log. `sendTo` diisi `m.chat` saat pendaftaran dari DM; record lama dicarikan
+  LID-nya lewat `lidMap` terbalik (`lib/sholat.js -> sendTargetFor`).
 
 **Perubahan `lib/database.js`:**
 
