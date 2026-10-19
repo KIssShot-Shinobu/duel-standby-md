@@ -304,7 +304,10 @@ if (config.flags.noConnect) {
     },
   });
 
-  globalThis.conn = connection.conn;
+  // `globalThis.conn` diisi oleh lib/connection.js setiap socket (re)connect
+  // dibuat — lihat catatan di sana. Menulisnya di sini sekali saja membuat
+  // sweep memakai socket basi setelah reconnect.
+
 
   // ── IPC dengan supervisor (index.js) ──────────────────────────────────
   process.on('message', (message) => {

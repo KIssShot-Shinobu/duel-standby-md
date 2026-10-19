@@ -223,6 +223,41 @@ test('sweep: tanpa LID yang diketahui tetap memakai nomor (perilaku lama tidak r
   assert.equal(socket.percobaan[0], JKT);
 });
 
+test('sweep: saat sambungan WhatsApp tertutup, DM ditunda tanpa memakai jatah percobaan', async () => {
+  const db = fakeDb();
+  subscribe(db, JKT, JAKARTA, { now: 0 });
+  const logger = fakeLogger();
+  const socket = fakeSocket();
+  // Seperti Baileys saat websocket-nya tertutup: `sendMessage` akan melempar
+  // "Connection Closed" tanpa sempat mengirim apa pun.
+  socket.ws = { isOpen: false };
+
+  const plan = await runSholatSweep(db, CONFIG, socket, { now: SEKARANG, logger, fetchTimes: timesFor() });
+
+  assert.equal(plan.sends.length, 1, 'rencana kirimnya tetap dihitung');
+  assert.equal(socket.percobaan.length, 0, 'tidak boleh mencoba kirim saat sambungan tertutup');
+  assert.deepEqual(getSubscription(db, JKT).sent, { date: '', keys: [] });
+  assert.equal(getSubscription(db, JKT).attempts, null, 'jatah percobaan tidak boleh terpakai');
+  assert.match(logger.warnings.join('\n'), /tertutup/i);
+});
+
+test('sweep: begitu sambungan hidup lagi, DM terkirim (jatah percobaan masih utuh)', async () => {
+  const db = fakeDb();
+  subscribe(db, JKT, JAKARTA, { now: 0 });
+  const logger = fakeLogger();
+
+  const putus = fakeSocket();
+  putus.ws = { isOpen: false };
+  await runSholatSweep(db, CONFIG, putus, { now: SEKARANG, logger, fetchTimes: timesFor() });
+
+  const hidup = fakeSocket();
+  hidup.ws = { isOpen: true };
+  await runSholatSweep(db, CONFIG, hidup, { now: SEKARANG + 60_000, logger, fetchTimes: timesFor() });
+
+  assert.equal(hidup.terkirim.length, 1, 'DM harus terkirim begitu tersambung');
+  assert.deepEqual(getSubscription(db, JKT).sent, { date: TANGGAL, keys: ['maghrib'] });
+});
+
 test('sweep: tanpa pelanggan tidak menyentuh jaringan sama sekali', async () => {
   const db = fakeDb();
   let panggilan = 0;
