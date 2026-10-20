@@ -20,6 +20,29 @@ import { getQuiz } from '../lib/quiz-instance.js';
 
 const MAX_HISTORY = 12;
 
+/**
+ * Pesan yang dibalas (`m.quoted`) berasal dari BOT INI?
+ *
+ * `m.quoted.fromMe` saja tidak cukup: di grup berbasis LID, `participant` pada
+ * pesan yang di-quote berisi LID bot (bukan `conn.user.id`), sehingga fromMe
+ * bernilai false walau pesannya milik bot. Identitas bot karena itu dicek dalam
+ * dua bentuk: nomor telepon (`user.id`) dan LID (`user.lid`).
+ *
+ * Sengaja TIDAK memakai "ada m.quoted" saja: balasan ke pesan member lain dulu
+ * ikut dijawab AI waifu, padahal bukan ditujukan ke bot.
+ */
+function isQuotedFromBot(m, conn) {
+  const quoted = m?.quoted;
+  if (!quoted) return false;
+  if (quoted.fromMe) return true;
+  const sender = cleanJid(quoted.sender || '');
+  if (!sender) return false;
+  return [conn?.user?.id, conn?.user?.lid]
+    .filter(Boolean)
+    .map((jid) => cleanJid(jid))
+    .includes(sender);
+}
+
 /** Buka koneksi ke provider AI dan kembalikan jawaban teks. */
 async function callAI(config, messages, { model } = {}) {
   let response;
@@ -160,10 +183,11 @@ const handler = async (m, { text, command, config, chatData, db, usedPrefix, isO
 
 /**
  * Hook: owner berbicara dengan bot -> langsung dijawab AI berpersona waifu.
- * Terdiri dari: DM (chat pribadi), reply apa pun, atau tag/mention bot.
- * Deteksi reply tidak bergantung pada `m.quoted.fromMe` (WhatsApp kadang
- * memakai LID untuk participant), jadi cukup keberadaan `m.quoted`.
- * Berjalan DM & grup, bypass gating rent.
+ * Terdiri dari: DM (chat pribadi), REPLY pesan bot itu sendiri, atau
+ * tag/mention bot. Balasan ke pesan ORANG LAIN (termasuk pesan owner sendiri)
+ * tidak dianggap bicara dengan bot — dulu semua `m.quoted` ikut dijawab.
+ * Deteksi reply memakai `isQuotedFromBot()` yang mengenali bot lewat nomor
+ * telepon maupun LID. Berjalan DM & grup, bypass gating rent.
  */
 handler.all = async (m, { conn, config, isOwner } = {}) => {
   if (isOwner !== true) return;
@@ -183,7 +207,7 @@ handler.all = async (m, { conn, config, isOwner } = {}) => {
 
   const botJid = conn?.user?.id ? cleanJid(conn.user.id) : '';
   const taggedBot = Boolean(botJid && (m.mentionedJid || []).some((jid) => cleanJid(jid) === botJid));
-  const directed = m.isGroup === false || Boolean(m.quoted) || taggedBot;
+  const directed = m.isGroup === false || isQuotedFromBot(m, conn) || taggedBot;
   if (!directed) return;
 
   if (!config?.ai?.key) {

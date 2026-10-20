@@ -129,6 +129,53 @@ test('NON-owner reply pesan bot -> AI TIDAK dipanggil', async () => {
   t.db.close();
 });
 
+test('owner reply pesan USER LAIN -> AI TIDAK dipanggil', async () => {
+  const t = await setup();
+  stubAI('Hmph. Ini tidak seharusnya muncul.');
+  await handleMessage(t.conn, {
+    key: { remoteJid: 'o1@g.us', fromMe: false, id: `U${Math.random()}`, participant: OWNER },
+    message: {
+      extendedTextMessage: {
+        text: 'eh iya bener',
+        contextInfo: {
+          participant: '628222@s.whatsapp.net', // member lain, bukan bot
+          quotedMessage: { conversation: 'pesan member lain' },
+        },
+      },
+    },
+    messageTimestamp: Math.floor(Date.now() / 1000),
+    pushName: 'Owner',
+  }, { plugins: t.plugins, db: t.db, config: t.config, logger: quiet });
+  assert.equal(aiCalls, 0, 'balasan ke pesan user lain tidak boleh memicu AI');
+  assert.doesNotMatch(aiText(t.sent), /tidak seharusnya muncul/i);
+  t.db.close();
+});
+
+test('owner reply pesan bot lewat LID (fromMe false) -> AI tetap menjawab', async () => {
+  const t = await setup();
+  // Grup berbasis LID: quoted participant berisi LID bot, bukan nomor teleponnya,
+  // sehingga `m.quoted.fromMe` bernilai false walau pesan itu milik bot.
+  t.conn.user.lid = '99887766@lid';
+  stubAI('Hmph. Aku mendengarmu.');
+  await handleMessage(t.conn, {
+    key: { remoteJid: 'o1@g.us', fromMe: false, id: `L${Math.random()}`, participant: OWNER },
+    message: {
+      extendedTextMessage: {
+        text: 'lanjutkan ceritamu',
+        contextInfo: {
+          participant: '99887766@lid',
+          quotedMessage: { conversation: 'jawaban AI sebelumnya' },
+        },
+      },
+    },
+    messageTimestamp: Math.floor(Date.now() / 1000),
+    pushName: 'Owner',
+  }, { plugins: t.plugins, db: t.db, config: t.config, logger: quiet });
+  assert.equal(aiCalls, 1, 'balasan ke pesan bot (via LID) harus tetap dijawab AI');
+  assert.match(aiText(t.sent), /mendengarmu/i);
+  t.db.close();
+});
+
 test('owner DM teks polos (tanpa reply/tag) -> AI menjawab', async () => {
   const t = await setup();
   stubAI('Hmph. Kau mencariku?');
