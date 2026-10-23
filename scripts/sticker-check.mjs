@@ -82,7 +82,21 @@ if (media.hasFfmpeg()) {
     null,
   );
   const vidWebp = await media.videoToWebp(mp4, { seconds: 3 });
-  say('6. Video ke stiker', `${vidWebp.length} bytes • magic ${vidWebp.subarray(8, 12).toString()}`, { tag: 'success' });
+  // ffmpeg menulis ke pipe (tidak bisa seek) -> ukuran RIFF bisa tertinggal 0.
+  // WhatsApp menolak berkas seperti itu: stiker terkirim tapi tampil kosong.
+  const riffOk = vidWebp.readUInt32LE(4) === vidWebp.length - 8;
+  let frames = 0;
+  if (sharp) {
+    try {
+      frames = (await sharp(vidWebp, { animated: true }).metadata()).pages || 0;
+    } catch {
+      frames = 0;
+    }
+  }
+  say('6. Video ke stiker', `${vidWebp.length} bytes • ${frames || '?'} frame • RIFF ${riffOk ? 'OK' : 'SALAH'}`, {
+    tag: riffOk && frames > 1 ? 'success' : 'error',
+  });
+  if (!riffOk || (sharp && frames <= 1)) print.warn('Stiker video rusak/kosong — kirim output ini.');
 } else {
   say('6. Video ke stiker', 'dilewati (butuh ffmpeg — GIF tetap jalan tanpa ffmpeg)');
 }
