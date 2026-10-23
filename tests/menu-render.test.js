@@ -98,6 +98,36 @@ test('.menu ringkas: sapaan + info bot + daftar kategori', async () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test('.menu: kategori owner hanya tampil untuk owner', async () => {
+  const asUser = await render([], { owner: false });
+  assert.match(asUser.out, /\.menu main/, 'kategori biasa tetap tampil');
+  assert.doesNotMatch(asUser.out, /\.menu owner/, 'user biasa tidak boleh melihat kategori owner');
+  asUser.db.close();
+  fs.rmSync(asUser.dir, { recursive: true, force: true });
+
+  const asOwner = await render([], { owner: true });
+  assert.match(asOwner.out, /\.menu owner/, 'owner tetap melihat kategori owner');
+  asOwner.db.close();
+  fs.rmSync(asOwner.dir, { recursive: true, force: true });
+});
+
+test('.menu owner untuk non-owner dianggap tidak ada', async () => {
+  const { out, db, dir } = await render(['owner'], { owner: false });
+  assert.match(out, /gak ketemu atau disembunyikan/);
+  assert.doesNotMatch(out, /\.menuset|\.premium|\.mode\b/);
+  db.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('.menu all untuk non-owner tidak memuat command owner', async () => {
+  const { out, db, dir } = await render(['all'], { owner: false });
+  assert.doesNotMatch(out, /OWNER \(\d+\)/, 'blok kategori owner harus hilang');
+  assert.doesNotMatch(out, /\.menuset|\.premium|\.mode\b/);
+  assert.match(out, /MAIN \(\d+\)/, 'kategori biasa tetap ada');
+  db.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test('.menu all menampilkan seluruh command per kategori', async () => {
   const { out, db, dir } = await render(['all']);
 

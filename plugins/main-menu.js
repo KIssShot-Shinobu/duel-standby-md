@@ -46,12 +46,15 @@ const handler = async (m, { conn, plugins, config, db, usedPrefix, args, isOwner
 
   const visible = [...categoryMap.entries()]
     .map(([tag, entries]) => [tag, entries.filter((entry) => commandState(db, entry.name).visible)])
-    .filter(([tag]) => categoryState(db, tag).visible);
+    .filter(([tag]) => categoryState(db, tag).visible)
+    // Kategori `owner` hanya untuk owner — user biasa tidak perlu melihat daftar
+    // command yang tetap akan ditolak handler.
+    .filter(([tag]) => isOwner === true || tag !== 'owner');
   const categories = sortCategories(visible.map(([tag]) => tag)).map((tag) => [tag, visible.find(([item]) => item === tag)?.[1] || []]);
 
   // ── Detail satu command: `.help sticker` / `.menu sticker` ──────────────
   const entry = query ? plugins.find(query) : null;
-  if (entry && commandState(db, entry.name).visible) {
+  if (entry && commandState(db, entry.name).visible && (isOwner === true || entry.category !== 'owner')) {
     const limit = resolveLimit(db, entry);
     const categoryEnabled = categoryState(db, entry.category).enabled;
     const names = allNames(entry);
