@@ -21,6 +21,7 @@ import { attachHelpers } from '../lib/simple.js';
 import stickerPlugin from '../plugins/tools-sticker.js';
 
 const FIXTURE_GIF = path.resolve(import.meta.dirname, 'fixtures', 'animated.gif');
+const FIXTURE_MP4 = path.resolve(import.meta.dirname, 'fixtures', 'color.mp4');
 const fixture = () => fs.readFileSync(FIXTURE_GIF);
 
 /** PNG 256x256 dibuat dengan sharp (tanpa ffmpeg). */
@@ -76,6 +77,18 @@ test('videoToWebp menghormati batas durasi (jumlah frame)', async () => {
   const pendek = await videoToWebp(fixture(), { seconds: 0.2, fps: 5 });
   const meta = await sharp(pendek, { animated: true }).metadata();
   assert.ok(meta.pages <= 2, `frame harus dipangkas, dapat ${meta.pages}`);
+});
+
+test('videoToWebp: mp4 -> WebP yang bisa didekode (ukuran RIFF tidak nol)', async (t) => {
+  if (!hasFfmpeg()) return t.skip('ffmpeg tidak tersedia');
+  const webp = await videoToWebp(fs.readFileSync(FIXTURE_MP4), { seconds: 1, fps: 10 });
+
+  assert.equal(webp.subarray(8, 12).toString(), 'WEBP');
+  assert.equal(webp.readUInt32LE(4), webp.length - 8, 'field ukuran RIFF harus benar');
+  // Dulu ffmpeg menulis RIFF size = 0 (output lewat pipe tidak bisa di-seek),
+  // sehingga libwebp/WhatsApp menolak header -> stiker terkirim tapi kosong.
+  const meta = await sharp(webp, { animated: true }).metadata();
+  assert.ok((meta.pages || 1) > 1, `stiker mp4 harus bergerak (pages=${meta.pages})`);
 });
 
 // ── Plugin .sticker ────────────────────────────────────────────────────────

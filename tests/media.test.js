@@ -18,6 +18,7 @@ import {
   pickDownloadedFile,
   resolveYtDlp,
   runFfmpeg,
+  runProcess,
   toAudio,
   videoToWebp,
   webpToPng,
@@ -536,6 +537,14 @@ test('audioExtension menebak jenis audio dari magic bytes', () => {
   assert.equal(audioExtension(Buffer.concat([Buffer.from('OggS'), Buffer.alloc(12)])), 'ogg');
   assert.equal(audioExtension(Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])), 'webm');
   assert.equal(audioExtension(Buffer.alloc(4)), 'm4a');
+});
+
+test('runProcess tidak crash kalau proses menutup stdin lebih awal (EPIPE)', async () => {
+  // ffmpeg berhenti membaca input begitu batas `-t` tercapai; sisa buffer yang
+  // masih ditulis memicu EPIPE di stdin. Dulu error itu tidak ditangani sama
+  // sekali, jadi satu video kepanjangan bisa mematikan proses bot.
+  const out = await runProcess(process.execPath, ['-e', 'process.exit(0)'], Buffer.alloc(8 * 1024 * 1024));
+  assert.ok(Buffer.isBuffer(out));
 });
 
 // ── Petunjuk pemasangan ffmpeg ──────────────────────────────────────────────
