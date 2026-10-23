@@ -61,29 +61,82 @@ test('wrapCommands tidak menyisakan pemisah di ujung baris', () => {
 
 // ── Ringkasan menu ─────────────────────────────────────────────────────────
 
-test('.menu ringkas: satu baris per kategori utama, alias tidak dibanjiri', async () => {
+test('.menu ringkas: sapaan + info bot + daftar kategori', async () => {
   const { out, db, dir } = await render();
 
   const lines = out.split('\n');
-  assert.ok(lines.length < 70, `menu terlalu panjang: ${lines.length} baris`);
+  assert.ok(lines.length < 40, `menu terlalu panjang: ${lines.length} baris`);
   assert.ok(out.length < 1200, `menu terlalu panjang: ${out.length} karakter`);
 
-  // nama utama tampil
+  // sapaan menyebut pengirim (mention), bukan nama mati
+  assert.match(out, /^Hallo @\d+! 👋/);
+  assert.match(out, /siap membantu Anda 24\/7/);
+
+  // blok info bot
+  assert.match(out, /I N F O  B O T/);
+  assert.match(out, /Mode : Publik/);
+  assert.match(out, /Nama : .+/);
+  assert.match(out, /Versi : /);
+  assert.match(out, /Limits : \d+/);
+  assert.match(out, /Uptime : \d{2}:\d{2}:\d{2}/);
+
+  // daftar menu = kategori, bukan seluruh command
+  assert.match(out, /DAFTAR MENU/);
+  assert.match(out, /\.menu all/);
+  assert.match(out, /\.menu main/);
+  assert.match(out, /\.menu tools/);
+  assert.match(out, /\.menu nsfw/);
+  assert.match(out, /Contoh: \.menu /);
+  assert.match(out, /Powered By /);
+
+  // command individual tidak membanjiri menu utama (pindah ke `.menu all`)
+  assert.doesNotMatch(out, /\.smeme/);
+  assert.doesNotMatch(out, /\.tebakygo/);
+  assert.doesNotMatch(out, /\.stiker/, 'alias tidak perlu di menu utama');
+
+  db.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('.menu: kategori owner hanya tampil untuk owner', async () => {
+  const asUser = await render([], { owner: false });
+  assert.match(asUser.out, /\.menu main/, 'kategori biasa tetap tampil');
+  assert.doesNotMatch(asUser.out, /\.menu owner/, 'user biasa tidak boleh melihat kategori owner');
+  asUser.db.close();
+  fs.rmSync(asUser.dir, { recursive: true, force: true });
+
+  const asOwner = await render([], { owner: true });
+  assert.match(asOwner.out, /\.menu owner/, 'owner tetap melihat kategori owner');
+  asOwner.db.close();
+  fs.rmSync(asOwner.dir, { recursive: true, force: true });
+});
+
+test('.menu owner untuk non-owner dianggap tidak ada', async () => {
+  const { out, db, dir } = await render(['owner'], { owner: false });
+  assert.match(out, /gak ketemu atau disembunyikan/);
+  assert.doesNotMatch(out, /\.menuset|\.premium|\.mode\b/);
+  db.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('.menu all untuk non-owner tidak memuat command owner', async () => {
+  const { out, db, dir } = await render(['all'], { owner: false });
+  assert.doesNotMatch(out, /OWNER \(\d+\)/, 'blok kategori owner harus hilang');
+  assert.doesNotMatch(out, /\.menuset|\.premium|\.mode\b/);
+  assert.match(out, /MAIN \(\d+\)/, 'kategori biasa tetap ada');
+  db.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('.menu all menampilkan seluruh command per kategori', async () => {
+  const { out, db, dir } = await render(['all']);
+
+  assert.match(out, /SEMUA COMMAND/);
   assert.match(out, /MAIN \(\d+\)/);
-  assert.match(out, /\.menu/);
   assert.match(out, /\.smeme/);
   assert.match(out, /\.tebakygo/);
   assert.match(out, /\.nsfw/);
-
-  // alias TIDAK ikut di ringkasan (muncul di .menu <kategori>)
-  assert.doesNotMatch(out, /\.stiker/, 'alias .stiker tidak perlu di ringkasan');
-  assert.doesNotMatch(out, /\.bantuan/, 'alias .bantuan tidak perlu di ringkasan');
-
-  // ada baris kosong antar kategori supaya tidak menempel
-  assert.match(out, /(Belum ada command|\.\w+)\n\n/);
-
-  // footer ringkasan
-  assert.match(out, /Ketik `.menu <kategori>`/);
+  assert.doesNotMatch(out, /\.stiker/, 'alias tetap tidak ikut');
   db.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -101,7 +154,7 @@ test('.menu menandai kategori yang dimatikan owner', async () => {
   const m = { chat: 'x', sender: '628999999999@s.whatsapp.net', pushName: 'Owner', reply: async (t) => { out = String(t); } };
   await menuPlugin(m, { conn, plugins, config, db, usedPrefix: '.', args: [], command: 'menu', isOwner: true });
 
-  assert.match(out, /GAME \(\d+\) ⛔/);
+  assert.match(out, /\.menu game ⛔/);
   db.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -131,6 +184,9 @@ test('.menu <kategori> kosong tetap memberi keterangan', async () => {
   const m = { chat: 'x', sender: '628999999999@s.whatsapp.net', pushName: 'Owner', reply: async (t) => { out = String(t); } };
 
   await menuPlugin(m, { conn, plugins, config, db, usedPrefix: '.', args: [], command: 'menu', isOwner: true });
+  assert.match(out, /\.menu nsfw/);
+
+  await menuPlugin(m, { conn, plugins, config, db, usedPrefix: '.', args: ['all'], command: 'menu', isOwner: true });
   assert.match(out, /NSFW \(18\+\)/);
   assert.match(out, /Belum ada command di sini/);
 
