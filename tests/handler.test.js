@@ -74,9 +74,9 @@ test('menu menampilkan kategori dari semua plugin', async () => {
   await handleMessage(conn, textMsg('.menu'), { plugins, db, config, logger: quiet });
 
   const menu = lastText(sent);
-  assert.match(menu, /MAIN/);
-  assert.match(menu, /TOOLS/);
-  assert.match(menu, /DOWNLOADER/);
+  assert.match(menu, /\.menu main/);
+  assert.match(menu, /\.menu tools/);
+  assert.match(menu, /\.menu downloader/);
   assert.ok(menu.length > 300, 'menu terlalu pendek');
   db.close();
 });

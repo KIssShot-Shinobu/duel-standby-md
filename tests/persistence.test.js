@@ -160,8 +160,8 @@ test('menu memakai pengaturan hasil muat ulang (bukan default)', async () => {
   });
 
   const menu = sent.at(-1);
-  assert.doesNotMatch(menu, /GAME/, 'kategori game harus tetap tersembunyi setelah restart');
+  assert.doesNotMatch(menu, /\.menu game/, 'kategori game harus tetap tersembunyi setelah restart');
   assert.doesNotMatch(menu, /\.smeme/);
-  assert.match(menu, /NSFW \(18\+\)/, 'placeholder nsfw tetap ada');
+  assert.match(menu, /\.menu nsfw/, 'kategori nsfw tetap ada');
   reloaded.close();
 });

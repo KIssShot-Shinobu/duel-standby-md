@@ -199,6 +199,12 @@ test('.menu menampilkan kategori nsfw + command, dan menyembunyikan yang di-hide
   const plugins = await loadRealPlugins();
   const ctx = menuCtx(db, plugins);
 
+  // `.menu` ringkas hanya berisi daftar kategori; command ada di `.menu all`.
+  await menuPlugin(ctx.m, ctx);
+  assert.match(lastText(ctx), /\.menu nsfw/, 'kategori nsfw harus tampil');
+  assert.doesNotMatch(lastText(ctx), /\.smeme/, 'command tidak membanjiri menu utama');
+
+  ctx.args = ['all'];
   await menuPlugin(ctx.m, ctx);
   const awal = lastText(ctx);
   assert.match(awal, /NSFW \(18\+\)/, 'kategori nsfw harus tampil');
