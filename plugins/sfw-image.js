@@ -1,7 +1,7 @@
 /**
  * Gambar anime aman (SFW) — pasangan dari `.nsfw`.
  *
- *   .sfw              -> gambar acak (nekos.best: neko/waifu)
+ *   .sfw              -> waifu acak (kategori waifu)
  *   .sfw hug          -> kategori nekos.best / PurrBot
  *   .sfw cat_ears     -> tag booru (Safebooru / Danbooru rating:safe)
  *   .sfwlist          -> daftar kategori yang tersedia
@@ -47,7 +47,7 @@ function withPickLock(fn) {
 const TAG_EXAMPLES = ['cat_ears', 'kimono', 'school_uniform', 'landscape', 'twintails'];
 
 function helpText(config, usedPrefix) {
-  const lines = ['🖼️ *GAMBAR ANIME (SFW)*', '', `• ${usedPrefix}sfw — gambar acak`, `• ${usedPrefix}sfw hug — kategori siap pakai`, `• ${usedPrefix}sfw cat_ears — cari sesuai tag`];
+  const lines = ['🖼️ *GAMBAR ANIME (SFW)*', '', `• ${usedPrefix}sfw — waifu acak (default)`, `• ${usedPrefix}sfw hug — kategori siap pakai`, `• ${usedPrefix}sfw cat_ears — cari sesuai tag`];
   for (const group of listCategories('sfw')) {
     lines.push('', `*${group.provider}:* ${group.categories.slice(0, 18).join(', ')}${group.categories.length > 18 ? ', …' : ''}`);
   }
@@ -58,7 +58,9 @@ function helpText(config, usedPrefix) {
 const handler = async (m, { conn, text, config, usedPrefix, command }) => {
   if (/^sfwlist$/i.test(command)) return m.reply(helpText(config, usedPrefix));
 
-  const query = String(text || '').trim();
+  // Tanpa argumen: pakai kategori waifu. Sebelumnya kosong -> nekos.best jatuh
+  // ke kategori `neko`, jadi `.sfw` selalu menampilkan nekomimi.
+  const query = String(text || '').trim() || 'waifu';
   const blocked = findBlockedTags(normalizeTags(query), config.images?.blockedTags);
   if (blocked.length) throw userError(`❌ Tag *${blocked.join(', ')}* tidak diizinkan.`);
 

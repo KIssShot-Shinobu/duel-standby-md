@@ -105,6 +105,40 @@ function makeContext({ config = imageConfig(), nsfw = false, isGroup = true, isA
 
 // ── SFW ────────────────────────────────────────────────────────────────────
 
+test('plugin .sfw tanpa argumen memakai kategori waifu', async () => {
+  clearListCache();
+  const calls = stubFetch({ 'nekos.best/api/v2': NEKOSBEST });
+  const { default: sfwPlugin } = await import('../plugins/sfw-image.js');
+  const ctx = makeContext();
+
+  await sfwPlugin(ctx.m, { ...ctx, text: '', usedPrefix: '.', command: 'sfw' });
+  assert.ok(
+    calls.some((call) => call.url.includes('nekos.best/api/v2/waifu')),
+    `harus meminta kategori waifu, dapat: ${calls.map((call) => call.url).join(', ')}`,
+  );
+});
+
+test('plugin .waifu tanpa argumen juga memakai kategori waifu', async () => {
+  clearListCache();
+  const calls = stubFetch({ 'nekos.best/api/v2': NEKOSBEST });
+  const { default: sfwPlugin } = await import('../plugins/sfw-image.js');
+  const ctx = makeContext();
+
+  await sfwPlugin(ctx.m, { ...ctx, text: '', usedPrefix: '.', command: 'waifu' });
+  assert.ok(calls.some((call) => call.url.includes('nekos.best/api/v2/waifu')));
+});
+
+test('plugin .sfw dengan kategori tetap memakai kategori itu (bukan waifu)', async () => {
+  clearListCache();
+  const calls = stubFetch({ 'nekos.best/api/v2': NEKOSBEST });
+  const { default: sfwPlugin } = await import('../plugins/sfw-image.js');
+  const ctx = makeContext();
+
+  await sfwPlugin(ctx.m, { ...ctx, text: 'hug', usedPrefix: '.', command: 'sfw' });
+  assert.ok(calls.some((call) => call.url.includes('nekos.best/api/v2/hug')));
+  assert.ok(!calls.some((call) => call.url.includes('/waifu')));
+});
+
 test('plugin .sfw mengirim gambar aman tanpa caption', async () => {
   clearListCache();
   stubFetch({ 'nekos.best/api/v2': NEKOSBEST });
@@ -403,7 +437,7 @@ test('.sfw bersamaan di chat yang sama tidak mengirim gambar sama (pilih + catat
   clearListCache();
   const { default: sfwPlugin } = await import('../plugins/sfw-image.js');
 
-  // Daftar statis3 kandidat � kedua pemanggilan melihat kandidat yang sama.
+  // Daftar statis3 kandidat � kedua pemanggilan melihat kandidat yang sama.
   globalThis.fetch = async (url) => {
     const target = String(url);
     if (target.includes('images.test')) return { ok: true, status: 200, arrayBuffer: async () => Buffer.from(target) };
