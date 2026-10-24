@@ -10,6 +10,7 @@ import { Database } from '../lib/database.js';
 import { PluginManager } from '../lib/plugins.js';
 import * as Rent from '../lib/rent.js';
 import rentGuard from '../plugins/_rent-guard.js';
+import rentPlugin from '../plugins/rent.js';
 
 const pluginsDir = path.resolve(import.meta.dirname, '..', 'plugins');
 const quiet = { warn() {}, error() {}, info() {}, debug() {} };
@@ -223,6 +224,33 @@ test('handler.all: teks DM dari user dengan pending rental diteruskan ke owner (
   assert.ok(forwarded, 'owner harus menerima bukti');
   assert.match(forwarded.content.text, /sudah transfer ya bang/);
   assert.equal(r.handled, false); // bukan command -> hook all (tidak diproses sebagai command)
+  t.db.close();
+});
+
+test('bukti bayar di-throttle 10 menit', async () => {
+  const t = await setup();
+  const sender = '628333@s.whatsapp.net';
+  Rent.requestRent(t.db, GROUP, { renter: sender, renterName: 'Siti' });
+
+  const m = {
+    isGroup: false, fromMe: false, sender, pushName: 'Siti',
+    mtype: 'conversation', text: 'sudah transfer',
+    download: async () => null,
+  };
+  const owners = t.config.bot.ownerJids.length;
+
+  let before = t.sent.length;
+  await rentPlugin.all(m, { db: t.db, conn: t.conn, config: t.config });
+  assert.equal(t.sent.length - before, owners, 'bukti pertama diteruskan');
+
+  before = t.sent.length;
+  await rentPlugin.all(m, { db: t.db, conn: t.conn, config: t.config });
+  assert.equal(t.sent.length - before, 0, 'bukti kedua dalam 10 menit tidak diteruskan');
+
+  t.db.data.rentals[GROUP].lastProofAt = Date.now() - 11 * 60 * 1000;
+  before = t.sent.length;
+  await rentPlugin.all(m, { db: t.db, conn: t.conn, config: t.config });
+  assert.equal(t.sent.length - before, owners, 'setelah 10 menit diteruskan lagi');
   t.db.close();
 });
 
