@@ -9,12 +9,14 @@ import {
   clockString,
   formatBytes,
   getTargets,
+  isYoutubeUrl,
   parseMention,
   shortClock,
   toJid,
 } from '../lib/functions.js';
 import { parseArgv, flagEnabled } from '../lib/argv.js';
 import { calculate } from '../plugins/tools-calc.js';
+import { resolveVideo } from '../plugins/downloader-ytmp3.js';
 
 test('toJid & cleanJid menormalkan nomor dan device suffix', () => {
   assert.equal(toJid('628123456789'), '628123456789@s.whatsapp.net');
@@ -74,6 +76,20 @@ test('parseArgv & flagEnabled', () => {
   assert.deepEqual(positionals, ['extra']);
   assert.equal(flagEnabled({ debug: 'false' }, 'debug', true), false);
   assert.equal(flagEnabled({}, 'debug', true), true);
+});
+
+test('isYoutubeUrl: hanya host YouTube', () => {
+  assert.equal(isYoutubeUrl('https://youtu.be/abc'), true);
+  assert.equal(isYoutubeUrl('https://www.youtube.com/watch?v=abc'), true);
+  assert.equal(isYoutubeUrl('https://m.youtube.com/watch?v=abc'), true);
+  assert.equal(isYoutubeUrl('https://youtube.com.evil.com/watch?v=abc'), false);
+  assert.equal(isYoutubeUrl('http://127.0.0.1:8080/x'), false);
+  assert.equal(isYoutubeUrl('http://169.254.169.254/latest/meta-data/'), false);
+  assert.equal(isYoutubeUrl('bukan url'), false);
+});
+
+test('resolveVideo: URL non-YouTube ditolak tanpa jaringan', async () => {
+  await assert.rejects(() => resolveVideo('http://127.0.0.1:8080/x', {}), /YouTube/);
 });
 
 test('calculate: aritmetika aman tanpa eval', () => {

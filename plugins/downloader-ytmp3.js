@@ -10,7 +10,7 @@
  */
 import ytsearch from 'yt-search';
 import { hasFfmpeg, hasYtDlp, toAudio, ytDlpDownload, ytDlpInfo, ytDlpInstallHint } from '../lib/media.js';
-import { formatBytes, isUrl, safeFileName, shortClock } from '../lib/functions.js';
+import { formatBytes, isUrl, isYoutubeUrl, safeFileName, shortClock } from '../lib/functions.js';
 import { ok, err, joinLines, thinking, resultText } from '../lib/messages.js';
 
 const AUDIO_MIME = {
@@ -38,6 +38,7 @@ export async function resolveVideo(input, config) {
   const value = String(input || '').trim();
   if (!value) throw new Error('Masukkan link YouTube atau kata kunci.');
 
+  if (isUrl(value) && !isYoutubeUrl(value)) throw new Error('Hanya link YouTube yang didukung.');
   if (isUrl(value)) {
     if (hasYtDlp(config?.ytdlp?.path)) {
       const info = await ytDlpInfo(value, { customPath: config?.ytdlp?.path }).catch(() => null);
