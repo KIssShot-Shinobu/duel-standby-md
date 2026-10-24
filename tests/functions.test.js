@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  applyStoredSettings,
   bareNumber,
   chunkText,
   cleanJid,
@@ -44,6 +45,18 @@ test('parseMention & getTargets', () => {
   assert.deepEqual(targets, ['628111@s.whatsapp.net', '628222@s.whatsapp.net', '628333444555@s.whatsapp.net']);
   // string pendek bukan nomor -> diabaikan
   assert.deepEqual(getTargets({ mentionedJid: [] }, ['123']), []);
+});
+
+test('applyStoredSettings: mode self dari database dipulihkan', () => {
+  const config = { bot: { mode: 'public' } };
+  assert.equal(applyStoredSettings(config, { settings: { mode: 'self' } }), 'self');
+  assert.equal(config.bot.mode, 'self');
+});
+
+test('applyStoredSettings: nilai rusak diabaikan', () => {
+  const config = { bot: { mode: 'public' } };
+  assert.equal(applyStoredSettings(config, { settings: { mode: 'hacker' } }), 'public');
+  assert.equal(applyStoredSettings(config, null), 'public');
 });
 
 test('chunkText memotong teks panjang', () => {

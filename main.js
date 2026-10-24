@@ -19,6 +19,7 @@ import { startHealthServer, writeStatus } from './lib/health.js';
 import { getOwnerMemory } from './lib/owner-ai.js';
 import { hasFfmpeg, hasYtDlp } from './lib/media.js';
 import { backupSessionDir } from './lib/session.js';
+import { applyStoredSettings } from './lib/functions.js';
 import { dispatchCall, dispatchGroupParticipants, dispatchGroupsUpdate, handleMessage } from './handler.js';
 
 const nodeMajor = Number(process.versions.node.split('.')[0]);
@@ -55,6 +56,7 @@ print.banner(
 
 // ── Database ────────────────────────────────────────────────────────────
 const db = await initDatabase(config, logger);
+applyStoredSettings(config, db.data);
 print.rows(
   [
     ['Mode', `${config.bot.mode} • prefix "${config.bot.prefix.join('')}"`],
