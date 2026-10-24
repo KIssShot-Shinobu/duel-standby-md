@@ -45,6 +45,46 @@ test('requestRent: status pending + renter tersimpan', () => {
   assert.equal(Rent.getRental(db, '123@g.us').renterName, 'Budi');
 });
 
+test('requestRent: renewal pada sewa aktif tidak mengunci grup', () => {
+  const db = fakeDb({
+    rentals: {
+      '120363000000000001@g.us': {
+        status: 'active',
+        renter: '628111@s.whatsapp.net',
+        renterName: 'Budi',
+        startedAt: Date.now() - 5 * DAY,
+        expiresAt: Date.now() + 10 * DAY,
+        reminders: { '3': '2026-10-01' },
+        history: [],
+      },
+    },
+  });
+
+  const rental = Rent.requestRent(db, '120363000000000001@g.us', { renter: '628111@s.whatsapp.net' });
+
+  assert.equal(rental.status, 'active', 'grup yang masih aktif tidak boleh jadi pending');
+  assert.ok(rental.renewalRequestedAt > 0, 'penanda permintaan perpanjangan harus diisi');
+  assert.deepEqual(rental.reminders, { '3': '2026-10-01' }, 'reminder periode berjalan tidak boleh direset');
+});
+
+test('requestRent: sewa kadaluarsa tetap jadi pending', () => {
+  const db = fakeDb({
+    rentals: {
+      '120363000000000002@g.us': {
+        status: 'active',
+        renter: '628222@s.whatsapp.net',
+        expiresAt: Date.now() - DAY,
+        history: [],
+      },
+    },
+  });
+
+  const rental = Rent.requestRent(db, '120363000000000002@g.us', { renter: '628222@s.whatsapp.net' });
+
+  assert.equal(rental.status, 'pending');
+  assert.equal(rental.renewalRequestedAt, undefined);
+});
+
 test('activateRent: active 30 hari + registry renters dibuat', () => {
   const db = fakeDb();
   Rent.activateRent(db, '123@g.us', { renter: '628111@s.whatsapp.net', renterName: 'Budi', days: 30, by: 'owner' });
