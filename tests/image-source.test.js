@@ -14,6 +14,7 @@ import {
   listCategories,
   normalizeTags,
 } from '../lib/image-source.js';
+import { config } from '../config.js';
 
 /** fetch tiruan: cocokkan URL dengan potongan string -> payload */
 function makeFetch(routes) {
@@ -245,4 +246,9 @@ test('imageCaption mencantumkan provider dan tautan sumber', () => {
   assert.match(caption, /some_artist/);
   assert.match(caption, /danbooru\.donmai\.us/);
   assert.match(caption, /🔞/);
+});
+
+test('purrbot tidak dipakai sebagai provider NSFW default', () => {
+  assert.ok(!config.images.providers.nsfw.includes('purrbot'));
+  assert.ok(config.images.providers.sfw.includes('purrbot'), 'SFW tetap memakai purrbot');
 });
