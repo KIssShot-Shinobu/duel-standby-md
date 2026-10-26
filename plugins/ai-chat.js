@@ -138,7 +138,32 @@ async function chatAnswer(m, { chatData, db, config }, prompt) {
   return answer;
 }
 
-const handler = async (m, { text, command, config, chatData, db, usedPrefix, isOwner }) => {
+const handler = async (m, { text, command, config, chatData, db, usedPrefix, isOwner, isMods }) => {
+  // Saklar fitur balasan AI otomatis (global). Owner & moderator saja.
+  if (/^(aireply|aichat)$/i.test(command)) {
+    if (isOwner !== true && isMods !== true) throw userError('Khusus owner & moderator.');
+    const choice = String(text || '').trim().toLowerCase();
+    const aktif = db.data.settings?.aiReply !== false && config.ai.ownerEnabled !== false;
+    if (!['on', 'off'].includes(choice)) {
+      return m.reply(
+        [
+          `🤖 Balasan AI otomatis: *${aktif ? 'AKTIF' : 'MATI'}*`,
+          '',
+          `Ubah: ${usedPrefix}aireply on|off`,
+          `Catatan: perintah manual \`${usedPrefix}ai <pertanyaan>\` tetap jalan walau saklar mati.`,
+        ].join('\n'),
+      );
+    }
+    if (!db.data.settings) db.data.settings = {};
+    db.data.settings.aiReply = choice === 'on';
+    db.touch();
+    return m.reply(
+      choice === 'on'
+        ? '✅ Balasan AI otomatis dinyalakan.'
+        : `⛔ Balasan AI otomatis dimatikan. Perintah manual \`${usedPrefix}ai\` tetap bisa dipakai.`,
+    );
+  }
+
   if (/^(resetai|aireset)$/i.test(command)) {
     chatData.aiHistory = [];
     db.touch();
@@ -189,9 +214,11 @@ const handler = async (m, { text, command, config, chatData, db, usedPrefix, isO
  * Deteksi reply memakai `isQuotedFromBot()` yang mengenali bot lewat nomor
  * telepon maupun LID. Berjalan DM & grup, bypass gating rent.
  */
-handler.all = async (m, { conn, config, isOwner } = {}) => {
+handler.all = async (m, { conn, config, db, isOwner } = {}) => {
   if (isOwner !== true) return;
   if (config?.ai?.ownerEnabled === false) return;
+  // Saklar global dari owner/moderator (`.aireply off`).
+  if (db?.data?.settings?.aiReply === false) return;
   if (m.fromMe || !m.text) return;
 
   // Saat game tebak kartu berjalan, pesan yang DIARAHKAN ke soal game (balas
@@ -233,9 +260,9 @@ handler.all = async (m, { conn, config, isOwner } = {}) => {
   }
 };
 
-handler.help = ['ai', 'chatgpt', 'resetai', 'resetownai'];
+handler.help = ['ai', 'chatgpt', 'resetai', 'resetownai', 'aireply'];
 handler.tags = ['ai'];
-handler.command = /^(ai|chatgpt|ask|resetai|aireset|resetownai|owneraireset)$/i;
+handler.command = /^(ai|chatgpt|ask|resetai|aireset|resetownai|owneraireset|aireply|aichat)$/i;
 handler.limit = true;
 
 export default handler;
