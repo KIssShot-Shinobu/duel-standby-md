@@ -25,6 +25,7 @@ import {
   videoToGif,
   videoToWebp,
   webpToMp4,
+  webpToJpeg,
   webpToPng,
 } from '../lib/media.js';
 import { extractText, detectType, hasMeaningfulContent, smsg } from '../lib/serialize.js';
@@ -56,6 +57,9 @@ test('konversi gambar -> webp -> png + exif', async (t) => {
 
   const back = await webpToPng(webp);
   assert.equal(back.subarray(1, 4).toString(), 'PNG');
+
+  const jpeg = await webpToJpeg(webp);
+  assert.equal(jpeg.subarray(0, 3).toString('hex'), 'ffd8ff');
 });
 
 test('stiker webp (animasi & statis) -> mp4', async (t) => {

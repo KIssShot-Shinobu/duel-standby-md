@@ -1,14 +1,16 @@
 /**
- * Stiker (termasuk yang bergerak) -> GIF WhatsApp / video MP4.
+ * Stiker -> format lain.
  *
- *   .togif  (reply stiker)  -> dikirim sebagai GIF (looping, tanpa suara)
- *   .tomp4  (reply stiker)  -> dikirim sebagai video biasa
+ *   .togif  (reply stiker)  -> GIF WhatsApp (looping, tanpa suara)
+ *   .tomp4  (reply stiker)  -> video MP4
+ *   .topng  (reply stiker)  -> gambar PNG
+ *   .tojpg  (reply stiker)  -> gambar JPG (latar transparan jadi putih)
  *
  * WhatsApp tidak memutar berkas `.gif` mentah; "GIF" di chat = video mp4
- * dengan `gifPlayback: true`. Jadi keduanya memakai konversi yang sama
- * (`webpToMp4`), bedanya hanya cara pengiriman.
+ * dengan `gifPlayback: true`. Stiker bergerak hanya diambil frame pertamanya
+ * untuk PNG/JPG.
  */
-import { detectMediaKind, ffmpegInstallHint, hasFfmpeg, webpToMp4 } from '../lib/media.js';
+import { detectMediaKind, ffmpegInstallHint, hasFfmpeg, webpToJpeg, webpToMp4, webpToPng } from '../lib/media.js';
 import { loadMedia, pickMediaSource } from '../lib/media-source.js';
 import { formatBytes } from '../lib/functions.js';
 import { userError } from '../lib/errors.js';
@@ -21,7 +23,7 @@ const usage = (usedPrefix, command) =>
     `• Reply (geser) stiker lalu kirim *${usedPrefix}${command}*`,
     `• atau kirim stiker dengan caption *${usedPrefix}${command}*`,
     '',
-    'Stiker bergerak jadi GIF/video; stiker diam jadi video 1 frame.',
+    'Perintah: .togif, .tomp4, .topng, .tojpg',
   ].join('\n');
 
 const handler = async (m, { conn, command, usedPrefix, config }) => {
@@ -39,33 +41,46 @@ const handler = async (m, { conn, command, usedPrefix, config }) => {
     );
   }
 
-  if (!hasFfmpeg()) {
-    throw userError(`❌ Konversi stiker butuh ffmpeg:\n${ffmpegInstallHint({ check: false })}`);
+  const cmd = String(command || '').toLowerCase();
+  const asVideo = cmd === 'togif' || cmd === 'tomp4';
+
+  if (asVideo && !hasFfmpeg()) {
+    throw userError(`❌ Konversi stiker ke video butuh ffmpeg:\n${ffmpegInstallHint({ check: false })}`);
   }
 
-  const mp4 = await webpToMp4(buffer);
-  if (!mp4?.length) throw userError('❌ Gagal mengubah stiker jadi video. Coba lagi.');
-  if (mp4.length > config.media.maxUploadBytes) {
-    throw userError(`❌ Hasil terlalu besar (${formatBytes(mp4.length)}) untuk dikirim WhatsApp.`);
-  }
+  let out;
+  let payload;
 
-  const asGif = /^togif$/i.test(command);
-  await conn.sendMessage(
-    m.chat,
-    {
-      video: mp4,
+  if (asVideo) {
+    out = await webpToMp4(buffer);
+    if (!out?.length) throw userError('❌ Gagal mengubah stiker jadi video. Coba lagi.');
+    payload = {
+      video: out,
       mimetype: 'video/mp4',
-      caption: `${asGif ? '🎞️ GIF' : '🎬 MP4'} dari stiker • ${formatBytes(mp4.length)}`,
-      ...(asGif ? { gifPlayback: true } : {}),
-    },
-    { quoted: m },
-  );
+      caption: `${cmd === 'togif' ? '🎞️ GIF' : '🎬 MP4'} dari stiker • ${formatBytes(out.length)}`,
+      ...(cmd === 'togif' ? { gifPlayback: true } : {}),
+    };
+  } else if (cmd === 'topng') {
+    out = await webpToPng(buffer);
+    if (!out?.length) throw userError('❌ Gagal mengubah stiker jadi PNG. Coba lagi.');
+    payload = { image: out, mimetype: 'image/png', caption: `🖼️ PNG dari stiker • ${formatBytes(out.length)}` };
+  } else {
+    out = await webpToJpeg(buffer);
+    if (!out?.length) throw userError('❌ Gagal mengubah stiker jadi JPG. Coba lagi.');
+    payload = { image: out, mimetype: 'image/jpeg', caption: `🖼️ JPG dari stiker • ${formatBytes(out.length)}` };
+  }
+
+  if (out.length > config.media.maxUploadBytes) {
+    throw userError(`❌ Hasil terlalu besar (${formatBytes(out.length)}) untuk dikirim WhatsApp.`);
+  }
+
+  await conn.sendMessage(m.chat, payload, { quoted: m });
   return true;
 };
 
-handler.help = ['togif', 'tomp4'];
+handler.help = ['togif', 'tomp4', 'topng', 'tojpg'];
 handler.tags = ['tools'];
-handler.command = /^(togif|tomp4)$/i;
+handler.command = /^(togif|tomp4|topng|tojpg)$/i;
 handler.limit = true;
 
 export default handler;

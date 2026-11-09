@@ -54,4 +54,16 @@ test('.togif mengirim video dengan gifPlayback, .tomp4 tanpa gifPlayback', async
   assert.equal(calls[1].gifPlayback, undefined);
   assert.equal(mp4VideoCodec(calls[1].video), 'avc1');
   assert.match(calls[1].caption, /MP4/i);
+
+  await handler(quotedMessage(sticker), { conn, command: 'topng', usedPrefix: '.', config });
+  assert.equal(calls.length, 3);
+  assert.equal(calls[2].mimetype, 'image/png');
+  assert.equal(calls[2].image.subarray(1, 4).toString(), 'PNG');
+  assert.match(calls[2].caption, /PNG/i);
+
+  await handler(quotedMessage(sticker), { conn, command: 'tojpg', usedPrefix: '.', config });
+  assert.equal(calls.length, 4);
+  assert.equal(calls[3].mimetype, 'image/jpeg');
+  assert.equal(calls[3].image.subarray(0, 3).toString('hex'), 'ffd8ff');
+  assert.match(calls[3].caption, /JPG/i);
 });

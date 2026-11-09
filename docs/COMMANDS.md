@@ -1,6 +1,6 @@
 # Daftar Command
 
-> Dibuat otomatis oleh `npm run commands -- --markdown` — 69 plugin, 194 command.
+> Dibuat otomatis oleh `npm run commands -- --markdown` — 69 plugin, 196 command.
 > Prefix default: `.` (lihat `PREFIX` di `.env`).
 
 ## ai
@@ -134,7 +134,7 @@
 | `.smeme`, `.stikermeme` | 1 limit | `sticker-smeme.js` |
 | `.calc`, `.kalkulator` | — | `tools-calc.js` |
 | `.qr`, `.qrcode` | — | `tools-qr.js` |
-| `.togif`, `.tomp4` | 1 limit | `tools-sticker-convert.js` |
+| `.togif`, `.tomp4`, `.topng`, `.tojpg` | 1 limit | `tools-sticker-convert.js` |
 | `.sticker`, `.stiker`, `.s` | 1 limit | `tools-sticker.js` |
 | `.toimg`, `.toimage` | 1 limit | `tools-toimg.js` |
 | `.tomp3`, `.toaudio` | 1 limit | `tools-tomp3.js` |
