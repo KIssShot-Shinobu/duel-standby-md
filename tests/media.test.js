@@ -22,7 +22,9 @@ import {
   runFfmpeg,
   runProcess,
   toAudio,
+  videoToGif,
   videoToWebp,
+  webpToMp4,
   webpToPng,
 } from '../lib/media.js';
 import { extractText, detectType, hasMeaningfulContent, smsg } from '../lib/serialize.js';
@@ -54,6 +56,44 @@ test('konversi gambar -> webp -> png + exif', async (t) => {
 
   const back = await webpToPng(webp);
   assert.equal(back.subarray(1, 4).toString(), 'PNG');
+});
+
+test('stiker webp (animasi & statis) -> mp4', async (t) => {
+  if (!ffmpeg) return t.skip('ffmpeg tidak terpasang');
+
+  // ffmpeg 5.1 tidak bisa decode WebP animasi, jadi jalur ini wajib lewat
+  // sharp -> rawvideo. Tes memastikan hasilnya mp4 H.264 yang sah.
+  const gif = fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'animated.gif'));
+  const animated = await videoToWebp(gif, { seconds: 3 });
+  const fromAnimated = await webpToMp4(animated);
+  assert.equal(mp4VideoCodec(fromAnimated), 'avc1');
+  assert.ok(fromAnimated.length > 0);
+
+  const png = await runFfmpeg(
+    ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=red:s=64x64', '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'png', 'pipe:1'],
+    null,
+  );
+  const fromStatic = await webpToMp4(await imageToWebp(png));
+  assert.equal(mp4VideoCodec(fromStatic), 'avc1');
+});
+
+test('jembatan video -> gif -> webp (untuk ffmpeg tanpa WebP animasi sah)', async (t) => {
+  if (!ffmpeg) return t.skip('ffmpeg tidak terpasang');
+
+  const mp4 = await runFfmpeg(
+    ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=size=256x256:rate=10:duration=1', '-pix_fmt', 'yuv420p', '-c:v', 'mpeg4', '-movflags', 'frag_keyframe+empty_moov', '-f', 'mp4', 'pipe:1'],
+    null,
+    { timeout: 60000 },
+  );
+  const gif = await videoToGif(mp4, { seconds: 2, fps: 10, size: 256 });
+  assert.equal(gif.subarray(0, 3).toString(), 'GIF');
+
+  const webp = await videoToWebp(gif, { seconds: 2, fps: 10 });
+  assert.equal(webp.subarray(8, 12).toString(), 'WEBP');
+  assert.equal((await detectMediaKind(webp)).kind, 'animated');
+
+  const out = await webpToMp4(webp);
+  assert.equal(mp4VideoCodec(out), 'avc1');
 });
 
 test('konversi audio (wav -> mp3)', async (t) => {
