@@ -640,7 +640,7 @@ Urutan default (bisa diatur lewat env `NSFW_PROVIDERS` / `IMAGE_PROVIDERS`):
 | Mode | Urutan |
 |---|---|
 | SFW | `nekosbest` → `danbooru` (safe) → `yandere` (safe) → `safebooru` → `purrbot` |
-| NSFW | `danbooru` (explicit) → `yandere` (explicit) → `purrbot` |
+| NSFW | `danbooru` (explicit) → `yandere` (explicit) |
 
 Semua provider **gratis tanpa akun**. Kalau satu provider error/kosong, bot otomatis pindah ke berikutnya; kalau semuanya gagal, user dapat pesan ramah (bukan stack trace).
 

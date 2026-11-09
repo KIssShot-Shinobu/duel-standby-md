@@ -176,6 +176,60 @@ test('owner reply pesan bot lewat LID (fromMe false) -> AI tetap menjawab', asyn
   t.db.close();
 });
 
+test('owner .aireply off -> balasan AI otomatis diam, .aireply on menyalakan lagi', async () => {
+  const t = await setup();
+  stubAI('Hmph. Aku di sini.');
+  const deps = { plugins: t.plugins, db: t.db, config: t.config, logger: quiet };
+  const cmd = (text) => ({
+    key: { remoteJid: OWNER, fromMe: false, id: `C${Math.random()}` },
+    message: { conversation: text },
+    messageTimestamp: Math.floor(Date.now() / 1000),
+    pushName: 'Owner',
+  });
+
+  await handleMessage(t.conn, cmd('.aireply off'), deps);
+  assert.equal(t.db.data.settings.aiReply, false, 'setelan harus tersimpan di database');
+
+  await handleMessage(t.conn, tagMsg('halo, masih di sana?'), deps);
+  assert.equal(aiCalls, 0, 'saat saklar mati, AI tidak boleh membalas');
+
+  await handleMessage(t.conn, cmd('.aireply on'), deps);
+  assert.equal(t.db.data.settings.aiReply, true);
+  await handleMessage(t.conn, tagMsg('halo lagi'), deps);
+  assert.equal(aiCalls, 1, 'setelah dinyalakan, AI menjawab lagi');
+  t.db.close();
+});
+
+test('.aireply: moderator boleh mengubah, user biasa ditolak', async () => {
+  const t = await setup();
+  stubAI();
+  const deps = { plugins: t.plugins, db: t.db, config: t.config, logger: quiet };
+  const MOD = '628333@s.whatsapp.net';
+  const USER = '628444@s.whatsapp.net';
+  const cmd = (sender, text) => ({
+    key: { remoteJid: 'o1@g.us', fromMe: false, id: `C${Math.random()}`, participant: sender },
+    message: { conversation: text },
+    messageTimestamp: Math.floor(Date.now() / 1000),
+    pushName: 'X',
+  });
+
+  t.db.user(MOD).role = 'mod';
+  await handleMessage(t.conn, cmd(MOD, '.aireply off'), deps);
+  assert.equal(t.db.data.settings.aiReply, false, 'moderator boleh mematikan');
+
+  t.db.data.settings.aiReply = true;
+  // User biasa dites di DM supaya tidak kena gate sewa grup.
+  await handleMessage(t.conn, {
+    key: { remoteJid: USER, fromMe: false, id: `C${Math.random()}` },
+    message: { conversation: '.aireply off' },
+    messageTimestamp: Math.floor(Date.now() / 1000),
+    pushName: 'User',
+  }, deps);
+  assert.equal(t.db.data.settings.aiReply, true, 'user biasa tidak boleh mengubah');
+  assert.match(aiText(t.sent), /owner|moderator/i, 'user biasa diberi tahu alasannya');
+  t.db.close();
+});
+
 test('owner DM teks polos (tanpa reply/tag) -> AI menjawab', async () => {
   const t = await setup();
   stubAI('Hmph. Kau mencariku?');

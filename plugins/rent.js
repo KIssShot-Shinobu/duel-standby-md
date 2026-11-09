@@ -290,14 +290,17 @@ async function handleOwner(m, ctx, sub, args) {
   return m.reply(`Subcommand: ${p}rent approve|reject|add|del|list|price\nApprove/add: <id grup> [nomor penyewa] [hari]`);
 }
 
+const PROOF_THROTTLE_MS = 10 * 60 * 1000;
+
 /**
  * Forward bukti bayar: pesan apa pun (teks/gambar) yang dikirim user berstatus
  * pending di DM diteruskan ke owner. Hanya berjalan saat pesan BUKAN command.
  */
 handler.all = async (m, { db, conn, config, ...ctx }) => {
   if (m.isGroup || m.fromMe || !m.sender) return;
+  const now = Date.now();
   const pendings = Object.entries(db.data.rentals || {}).filter(
-    ([, r]) => r.status === 'pending' && r.renter === m.sender,
+    ([, r]) => r.status === 'pending' && r.renter === m.sender && now - (r.lastProofAt || 0) >= PROOF_THROTTLE_MS,
   );
   if (!pendings.length) return;
 
@@ -316,7 +319,7 @@ handler.all = async (m, { db, conn, config, ...ctx }) => {
     for (const jid of config?.bot?.ownerJids || []) await conn.sendMessage(jid, { text: body }).catch(() => {});
   }
 
-  for (const [, r] of pendings) r.lastProofAt = Date.now();
+  for (const [, r] of pendings) r.lastProofAt = now;
   db.touch();
 };
 

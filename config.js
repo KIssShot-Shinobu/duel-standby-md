@@ -177,7 +177,7 @@ export const config = {
     cacheMax: envNumber('IMAGE_CACHE_MAX', 200),
     /** Urutan provider (lihat lib/image-source.js): danbooru, yandere, purrbot, nekosbest, safebooru */
     providers: {
-      nsfw: envList('NSFW_PROVIDERS', ['danbooru', 'yandere', 'purrbot']),
+      nsfw: envList('NSFW_PROVIDERS', ['danbooru', 'yandere']),
       sfw: envList('IMAGE_PROVIDERS', ['nekosbest', 'danbooru', 'yandere', 'safebooru', 'purrbot']),
     },
     /** Tag yang ditolak di input dan disaring dari hasil (konten anak = garis merah) */
