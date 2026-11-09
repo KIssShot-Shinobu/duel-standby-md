@@ -15,6 +15,8 @@ import {
   isGif,
   MAX_ANIMATED_STICKER_BYTES,
   MAX_STICKER_BYTES,
+  mp4VideoCodec,
+  toWhatsAppVideo,
   pickDownloadedFile,
   resolveYtDlp,
   runFfmpeg,
@@ -563,4 +565,41 @@ test('ffmpegInstallHint selalu menyebut Windows DAN Linux', () => {
   assert.match(bare, /winget install Gyan\.FFmpeg/, 'Windows tetap ada walau tanpa baris cek');
   assert.match(bare, /apt install ffmpeg/, 'Linux tetap ada walau tanpa baris cek');
   assert.doesNotMatch(bare, /ffmpeg -version/, 'check:false harus menyembunyikan baris cek');
+});
+
+// ── Kodek video untuk WhatsApp ──────────────────────────────────────────────
+
+test('mp4VideoCodec membaca fourcc kodek video dari berkas mp4', () => {
+  const h264 = fs.readFileSync(new URL('./fixtures/color.mp4', import.meta.url));
+  assert.equal(mp4VideoCodec(h264), 'avc1', 'fixture H.264 dikenali');
+
+  assert.equal(mp4VideoCodec(Buffer.from('xxxxav01yyyy')), 'av01', 'AV1 dikenali');
+  assert.equal(mp4VideoCodec(Buffer.from('bukan berkas video')), null, 'sampah -> null');
+});
+
+test('toWhatsAppVideo mengubah AV1 menjadi H.264 yang bisa diputar WhatsApp', async (t) => {
+  if (!ffmpeg) return t.skip('ffmpeg tidak terpasang');
+
+  let av1;
+  try {
+    // Facebook kini sering mengirim video AV1 (av01); WhatsApp tidak bisa
+    // memutarnya dan menampilkan "something is wrong with the video file".
+    av1 = await runFfmpeg(
+      [
+        '-hide_banner', '-loglevel', 'error',
+        '-f', 'lavfi', '-i', 'testsrc=size=96x96:rate=10:duration=1',
+        '-c:v', 'libaom-av1', '-pix_fmt', 'yuv420p',
+        '-movflags', 'frag_keyframe+empty_moov',
+        '-f', 'mp4', 'pipe:1',
+      ],
+      null,
+      { timeout: 120000 },
+    );
+  } catch {
+    return t.skip('encoder AV1 tidak tersedia di ffmpeg ini');
+  }
+
+  assert.equal(mp4VideoCodec(av1), 'av01', 'input tes memang AV1');
+  const fixed = await toWhatsAppVideo(av1);
+  assert.equal(mp4VideoCodec(fixed), 'avc1', 'hasil transkode harus H.264 (avc1)');
 });
