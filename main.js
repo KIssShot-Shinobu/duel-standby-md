@@ -15,6 +15,7 @@ import { createApi } from './lib/api.js';
 import { createConnection } from './lib/connection.js';
 import * as Rent from './lib/rent.js';
 import { runSholatSweep } from './lib/sholat-runner.js';
+import { backupProblem, sendDatabaseBackup } from './lib/backup.js';
 import { startHealthServer, writeStatus } from './lib/health.js';
 import { getOwnerMemory } from './lib/owner-ai.js';
 import { hasFfmpeg, hasYtDlp } from './lib/media.js';
@@ -199,6 +200,31 @@ if (config.sholat?.enabled !== false) {
       sholatSweepRunning = false;
     }
   }, config.sholat.sweepIntervalMs).unref?.();
+}
+
+// ── Backup database ke Telegram tiap beberapa jam ───────────────────────
+// Isi TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID di .env; interval lewat
+// BACKUP_INTERVAL_HOURS. Folder sessions/ (kredensial) tidak ikut dikirim.
+if (config.backup?.enabled !== false) {
+  const alasan = backupProblem(config);
+  if (alasan) {
+    logger.info(`[backup] dimatikan — ${alasan}`);
+  } else {
+    let backupRunning = false;
+
+    setInterval(async () => {
+      if (backupRunning) return;
+      backupRunning = true;
+      try {
+        const { sent, bytes } = await sendDatabaseBackup(db, config);
+        logger.info(`[backup] ${sent} file terkirim ke Telegram (${Math.round(bytes / 1024)} KB)`);
+      } catch (err) {
+        logger.error(`[backup] gagal: ${err.message}`);
+      } finally {
+        backupRunning = false;
+      }
+    }, Math.max(1, config.backup.intervalHours) * 3600 * 1000).unref?.();
+  }
 }
 
 // ── Mode tanpa koneksi (smoke test / cek instalasi) ─────────────────────

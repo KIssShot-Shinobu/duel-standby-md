@@ -38,9 +38,10 @@ handler.before = async (m, ctx = {}) => {
     const s = Rent.rentSettings(db, config);
     const price = s.pricePerMonth ? `Rp${s.pricePerMonth.toLocaleString('id-ID')}` : null;
     lines.push(
-      '🎫 *Penyewaan bot:*',
-      price ? `• Harga: ${price} / ${s.days} hari` : `• Durasi sewa: ${s.days} hari`,
-      `• DM bot: ${p}rent <nama grup | link | id>`,
+      '🎫 *Sewa bot:*',
+      '• Chat pribadi (DM) *gratis* — tanpa sewa, tanpa daftar.',
+      price ? `• Sewa hanya untuk memakai bot di *grup*: ${price} / ${s.days} hari` : `• Sewa grup: ${s.days} hari`,
+      `• Ajukan sewa grup lewat DM: ${p}rent <nama grup | link | id>`,
       s.helpNumber ? `• Butuh bantuan: https://wa.me/${s.helpNumber}` : null,
       '',
     );

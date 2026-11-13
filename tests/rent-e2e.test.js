@@ -83,6 +83,15 @@ test('grup owner tanpa rental: tidak dikunci', async () => {
   t.db.close();
 });
 
+test('DM user biasa: tidak butuh sewa (rent hanya untuk grup)', async () => {
+  const t = await setup();
+  const chat = ungated(t.db, '628555@s.whatsapp.net');
+  const r = await handleMessage(t.conn, msg('.calc 1+1', chat), { plugins: t.plugins, db: t.db, config: t.config, logger: quiet });
+  assert.notEqual(r.reason, 'rent-gated');
+  assert.equal(r.handled, true, replyText(t.sent, chat));
+  t.db.close();
+});
+
 test('grup sewa aktif: command kategori jalan', async () => {
   const t = await setup();
   Rent.activateRent(t.db, '999@g.us', { renter: '628111@s.whatsapp.net', renterName: 'Tester', days: 30, by: 'owner', now: Date.now() });

@@ -12,6 +12,7 @@ import { env, envNumber, envList } from './lib/env.js';
 import { parseArgv, flagEnabled } from './lib/argv.js';
 import { DEFAULT_BLOCKED_TAGS } from './lib/image-source.js';
 import { SHINOBU_PERSONA } from './lib/shinobu-persona.js';
+import { DEFAULT_STYLES } from './lib/sholat-ai.js';
 
 const ROOT = path.resolve(import.meta.dirname);
 const { flags, positionals } = parseArgv();
@@ -93,6 +94,18 @@ export const config = {
     saveInterval: envNumber('DB_SAVE_INTERVAL', 10000),
     /** true bila user meminta backend yang belum didukung (mis. MongoDB) */
     unsupportedBackend: typeof flags.db === 'string' && flags.db.startsWith('mongodb') ? flags.db : '',
+  },
+
+  /**
+   * Backup database ke Telegram tiap beberapa jam.
+   * Kosongkan TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID = fitur mati.
+   * Folder sessions/ (kredensial WhatsApp) sengaja TIDAK ikut dikirim.
+   */
+  backup: {
+    enabled: env('BACKUP_ENABLED', 'true') !== 'false',
+    intervalHours: envNumber('BACKUP_INTERVAL_HOURS', 6),
+    telegramToken: env('TELEGRAM_BOT_TOKEN', ''),
+    telegramChatId: env('TELEGRAM_CHAT_ID', ''),
   },
 
   media: {
@@ -277,6 +290,16 @@ export const config = {
     maxCandidates: envNumber('SHOLAT_MAX_CANDIDATES', 10),
     /** waktu yang dikirim, berurutan sesuai tampilan */
     prayers: envList('SHOLAT_PRAYERS', ['subuh', 'dzuhur', 'ashar', 'maghrib', 'isya']),
+    /** teks pengingat ditulis AI gaya pasangan; false = pakai template lama */
+    ai: env('SHOLAT_AI', 'true') !== 'false',
+    /** model khusus pengingat (kosong = ai.model) */
+    aiModel: env('SHOLAT_AI_MODEL', ''),
+    aiTimeoutMs: envNumber('SHOLAT_AI_TIMEOUT', 8000),
+    aiMaxChars: envNumber('SHOLAT_AI_MAX_CHARS', 400),
+    /** gaya yang diputar acak; lihat lib/sholat-ai.js */
+    aiStyles: envList('SHOLAT_AI_STYLES', DEFAULT_STYLES),
+    /** paksa satu gaya (kosong = acak) */
+    aiStyle: env('SHOLAT_AI_STYLE', ''),
   },
 
   /** Hadiah tiap pesan chat (XP & saldo acak) */

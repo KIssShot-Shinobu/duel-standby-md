@@ -117,12 +117,14 @@ test('E2E: intro mendahului command tanpa menelannya (command tetap dijawab)', a
 test('E2E: blok penyewaan ikut tampil saat rent aktif, hilang saat dimatikan', async () => {
   const on = await setup();
   await run(on, dm('halo'), baseConfig);
-  assert.match(introOf(on).content.text, /Penyewaan bot/, 'rent aktif -> blok sewa tampil');
+  const intro = introOf(on).content.text;
+  assert.match(intro, /Sewa bot/, 'rent aktif -> blok sewa tampil');
+  assert.match(intro, /DM\) \*gratis\*/, 'intro harus menyatakan DM gratis tanpa sewa');
   on.db.close();
 
   const off = await setup();
   await run(off, dm('halo'), { ...baseConfig, rent: { ...baseConfig.rent, enabled: false } });
-  assert.doesNotMatch(introOf(off).content.text, /Penyewaan bot/, 'rent dimatikan -> blok sewa hilang');
+  assert.doesNotMatch(introOf(off).content.text, /Sewa bot/, 'rent dimatikan -> blok sewa hilang');
   assert.match(introOf(off).content.text, /Cara penggunaan bot/, 'panduan dasar tetap ada');
   off.db.close();
 });

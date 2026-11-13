@@ -1,6 +1,6 @@
 # Daftar Command
 
-> Dibuat otomatis oleh `npm run commands -- --markdown` — 69 plugin, 196 command.
+> Dibuat otomatis oleh `npm run commands -- --markdown` — 71 plugin, 199 command.
 > Prefix default: `.` (lihat `PREFIX` di `.env`).
 
 ## ai
@@ -23,6 +23,7 @@
 | Command | Keterangan syarat | File |
 |---|---|---|
 | `.fb`, `.facebook`, `.fbdl` | 1 limit | `downloader-facebook.js` |
+| `.instagram`, `.ig` | 1 limit | `downloader-instagram.js` |
 | `.tiktok`, `.tt` | 1 limit | `downloader-tiktok.js` |
 | `.x`, `.twitter`, `.tw` | 1 limit | `downloader-twitter.js` |
 | `.ytmp3`, `.yta` | 1 limit | `downloader-ytmp3.js` |
@@ -103,6 +104,7 @@
 
 | Command | Keterangan syarat | File |
 |---|---|---|
+| `.backup` | owner | `owner-backup.js` |
 | `.ban`, `.unban` | — | `owner-ban.js` |
 | `.broadcast` | owner | `owner-broadcast.js` |
 | `.limitset`, `.limitcmd`, `.limitcat` | owner | `owner-limit.js` |

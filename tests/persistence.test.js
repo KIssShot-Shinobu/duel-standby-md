@@ -112,7 +112,7 @@ test('.category/.cmdset/.limitcmd langsung menulis ke disk (tanpa menunggu debou
   await ownerMenuPlugin(ownerCtx(db, plugins, { command: 'category', args: ['nsfw', 'on'] }).ctx.m, ownerCtx(db, plugins, { command: 'category', args: ['nsfw', 'on'] }).ctx);
   let raw = readRaw(file);
   assert.equal(raw.settings.menu.categories.nsfw.enabled, true, 'kategori nsfw harus langsung tersimpan');
-  assert.equal(raw.settings.menu.categories.nsfw.visible, true);
+  assert.equal(raw.settings.menu.categories.nsfw.visible, false, 'nsfw default disembunyikan dari menu');
 
   await ownerMenuPlugin(ownerCtx(db, plugins, { command: 'cmdset', args: ['smeme', 'hide'] }).ctx.m, ownerCtx(db, plugins, { command: 'cmdset', args: ['smeme', 'hide'] }).ctx);
   raw = readRaw(file);
@@ -162,6 +162,6 @@ test('menu memakai pengaturan hasil muat ulang (bukan default)', async () => {
   const menu = sent.at(-1);
   assert.doesNotMatch(menu, /\.menu game/, 'kategori game harus tetap tersembunyi setelah restart');
   assert.doesNotMatch(menu, /\.smeme/);
-  assert.match(menu, /\.menu nsfw/, 'kategori nsfw tetap ada');
+  assert.doesNotMatch(menu, /\.menu nsfw/, 'kategori nsfw disembunyikan default');
   reloaded.close();
 });

@@ -85,7 +85,8 @@ test('.menu ringkas: sapaan + info bot + daftar kategori', async () => {
   assert.match(out, /\.menu all/);
   assert.match(out, /\.menu main/);
   assert.match(out, /\.menu tools/);
-  assert.match(out, /\.menu nsfw/);
+  // nsfw disembunyikan default dari menu utama
+  assert.doesNotMatch(out, /\.menu nsfw/);
   assert.match(out, /Contoh: \.menu /);
   assert.match(out, /Powered By /);
 
@@ -135,7 +136,8 @@ test('.menu all menampilkan seluruh command per kategori', async () => {
   assert.match(out, /MAIN \(\d+\)/);
   assert.match(out, /\.smeme/);
   assert.match(out, /\.tebakygo/);
-  assert.match(out, /\.nsfw/);
+  // nsfw disembunyikan default dari menu all
+  assert.doesNotMatch(out, /\.nsfw/);
   assert.doesNotMatch(out, /\.stiker/, 'alias tetap tidak ikut');
   db.close();
   fs.rmSync(dir, { recursive: true, force: true });
@@ -176,6 +178,8 @@ test('.menu <kategori> kosong tetap memberi keterangan', async () => {
   db.load();
   const plugins = new PluginManager(pluginsDir, { logger: quiet });
   await plugins.loadAll();
+  // nsfw disembunyikan default; nyalakan untuk uji "kategori kosong tetap tampil"
+  setCategory(db, 'nsfw', { visible: true });
   // sembunyikan semua command NSFW -> kategori tetap tampil tapi kosong
   setCommand(db, 'nsfw-image.js', { visible: false });
 

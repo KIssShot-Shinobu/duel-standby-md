@@ -52,19 +52,21 @@ const makeConn = () => {
 
 // ── Pengaturan dasar ───────────────────────────────────────────────────────
 
-test('kategori nsfw: tampil & menyala sebagai master switch (konten tetap opt-in per grup)', () => {
+test('kategori nsfw: disembunyikan default dari menu (konten tetap opt-in per grup)', () => {
   const db = makeDb();
   const menu = ensureMenuSettings(db);
 
   assert.ok(KNOWN_CATEGORIES.nsfw, 'nsfw tidak terdaftar di KNOWN_CATEGORIES');
   assert.equal(KNOWN_CATEGORIES.nsfw.adult, true, 'nsfw harus ditandai kategori dewasa');
-  assert.equal(menu.categories.nsfw.visible, true, 'nsfw default tampil');
+  assert.equal(menu.categories.nsfw.visible, false, 'nsfw default disembunyikan dari menu');
   assert.equal(menu.categories.nsfw.enabled, true, 'master switch nyala; gambar tetap opt-in per grup');
 
-  assert.deepEqual(categoryState(db, 'nsfw'), { visible: true, enabled: true });
-  // owner tetap bisa mematikan seluruh fitur
+  assert.deepEqual(categoryState(db, 'nsfw'), { visible: false, enabled: true });
+  // owner tetap bisa mematikan seluruh fitur atau menampilkan kembali kategori
   setCategory(db, 'nsfw', { enabled: false });
   assert.equal(categoryState(db, 'nsfw').enabled, false);
+  setCategory(db, 'nsfw', { visible: true });
+  assert.equal(categoryState(db, 'nsfw').visible, true);
   // kategori lain default tampil & aktif
   assert.deepEqual(categoryState(db, 'game'), { visible: true, enabled: true });
   db.close();
@@ -194,29 +196,40 @@ const menuCtx = (db, plugins) => {
 
 const lastText = (ctx) => ctx.sent.at(-1)?.content?.text || '';
 
-test('.menu menampilkan kategori nsfw + command, dan menyembunyikan yang di-hide', async () => {
+test('.menu menyembunyikan kategori nsfw default, dan menampilkannya kalau owner show', async () => {
   const db = makeDb();
   const plugins = await loadRealPlugins();
   const ctx = menuCtx(db, plugins);
 
-  // `.menu` ringkas hanya berisi daftar kategori; command ada di `.menu all`.
+  // `.menu` ringkas hanya berisi daftar kategori; nsfw disembunyikan default
   await menuPlugin(ctx.m, ctx);
-  assert.match(lastText(ctx), /\.menu nsfw/, 'kategori nsfw harus tampil');
+  assert.doesNotMatch(lastText(ctx), /\.menu nsfw/, 'kategori nsfw disembunyikan default');
   assert.doesNotMatch(lastText(ctx), /\.smeme/, 'command tidak membanjiri menu utama');
 
   ctx.args = ['all'];
   await menuPlugin(ctx.m, ctx);
   const awal = lastText(ctx);
-  assert.match(awal, /NSFW \(18\+\)/, 'kategori nsfw harus tampil');
-  assert.match(awal, /\.nsfw/, 'command .nsfw tampil (kategori tetap mati sampai diaktifkan)');
-  assert.match(awal, /\.smeme/, 'smeme tampil secara default');
+  assert.doesNotMatch(awal, /NSFW \(18\+\)/, 'kategori nsfw tidak tampil di menu all default');
+  assert.doesNotMatch(awal, /\.nsfw/, 'command .nsfw tidak tampil default');
+  assert.match(awal, /\.smeme/, 'smeme tetap tampil secara default');
 
-  // sembunyikan command nsfw -> kategori tetap tampil, isinya kosong
+  // owner menampilkan kembali kategori nsfw
+  setCategory(db, 'nsfw', { visible: true });
+  ctx.args = ['all'];
+  await menuPlugin(ctx.m, ctx);
+  const setelah = lastText(ctx);
+  assert.match(setelah, /NSFW \(18\+\)/, 'kategori nsfw tampil setelah owner show');
+  assert.match(setelah, /\.nsfw/, 'command .nsfw tampil setelah kategori ditampilkan');
+  setCategory(db, 'nsfw', { visible: false });
+
+  // sembunyikan command nsfw langsung (kategori tetap tampil, isinya kosong)
+  setCategory(db, 'nsfw', { visible: true });
   setCommand(db, 'nsfw-image.js', { visible: false });
   await menuPlugin(ctx.m, ctx);
   assert.doesNotMatch(lastText(ctx), /\.nsfw/, 'command .nsfw harus hilang dari menu');
   assert.match(lastText(ctx), /Belum ada command di sini/, 'kategori kosong tetap tampil dengan keterangan');
   setCommand(db, 'nsfw-image.js', { visible: true });
+  setCategory(db, 'nsfw', { visible: false });
 
   // sembunyikan command smeme
   setCommand(db, 'sticker-smeme.js', { visible: false });

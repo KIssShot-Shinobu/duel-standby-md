@@ -275,3 +275,77 @@ test('sweep: tanpa pelanggan tidak menyentuh jaringan sama sekali', async () => 
   assert.equal(panggilan, 0);
   assert.equal(socket.terkirim.length, 0);
 });
+
+// ── Teks pengingat dari AI ─────────────────────────────────────────────────
+
+test('sweep: teks pengingat memakai hasil AI kalau tersedia', async () => {
+  const db = fakeDb();
+  subscribe(db, JKT, JAKARTA, { now: 0 });
+  const socket = fakeSocket();
+  const diminta = [];
+
+  await runSholatSweep(db, CONFIG, socket, {
+    now: SEKARANG,
+    fetchTimes: timesFor(),
+    generate: async (_config, send) => {
+      diminta.push(send.prayer);
+      return `Sayang, sudah ${send.prayer} jam ${send.time}.`;
+    },
+  });
+
+  assert.deepEqual(diminta, ['maghrib']);
+  assert.equal(socket.terkirim[0].content.text, 'Sayang, sudah maghrib jam 17:49.');
+});
+
+test('sweep: AI gagal -> teks bawaan tetap terkirim dan ditandai', async () => {
+  const db = fakeDb();
+  subscribe(db, JKT, JAKARTA, { now: 0 });
+  const socket = fakeSocket();
+
+  await runSholatSweep(db, CONFIG, socket, {
+    now: SEKARANG,
+    fetchTimes: timesFor(),
+    generate: async () => {
+      throw new Error('AI mati');
+    },
+  });
+
+  assert.equal(socket.terkirim.length, 1);
+  assert.match(socket.terkirim[0].content.text, /MAGHRIB/);
+  assert.deepEqual(getSubscription(db, JKT).sent, { date: TANGGAL, keys: ['maghrib'] });
+});
+
+test('sweep: tanpa pelanggan tidak memanggil AI', async () => {
+  let dipanggil = 0;
+  const plan = await runSholatSweep(fakeDb(), CONFIG, fakeSocket(), {
+    now: SEKARANG,
+    fetchTimes: timesFor(),
+    generate: async () => {
+      dipanggil += 1;
+      return 'teks';
+    },
+  });
+
+  assert.equal(dipanggil, 0);
+  assert.equal(plan.sends.length, 0);
+});
+
+test('sweep: sambungan tertutup -> AI tidak dipanggil', async () => {
+  const db = fakeDb();
+  subscribe(db, JKT, JAKARTA, { now: 0 });
+  const socket = fakeSocket();
+  socket.ws = { isOpen: false };
+  let dipanggil = 0;
+
+  await runSholatSweep(db, CONFIG, socket, {
+    now: SEKARANG,
+    fetchTimes: timesFor(),
+    generate: async () => {
+      dipanggil += 1;
+      return 'teks';
+    },
+  });
+
+  assert.equal(dipanggil, 0);
+  assert.equal(socket.terkirim.length, 0);
+});
